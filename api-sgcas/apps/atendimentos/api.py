@@ -80,6 +80,20 @@ def _proxima_senha(unidade_id: str, prioridade: str) -> str:
     return f'{prefixo}{max(numeros, default=0) + 1:03d}'
 
 
+def _acrescentar_ao_relato(caso, operador, momento, texto: str) -> None:
+    """
+    Acrescenta uma anotação datada e assinada ao relato do caso.
+
+    O relato é um histórico — a observação da recepção, a evolução durante o
+    atendimento, a conclusão —, e quem atende depois lê tudo isso. Por isso toda
+    escrita nele acrescenta; substituir apagaria o que os colegas registraram.
+    O chamador salva o caso.
+    """
+    marca = timezone.localtime(momento).strftime('%d/%m/%Y %H:%M')
+    anotacao = f'[{marca}] {operador.nome}: {texto}'
+    caso.descricao = f'{caso.descricao}\n\n{anotacao}' if caso.descricao else anotacao
+
+
 def _ordem_de_prioridade():
     return models.Case(
         models.When(prioridade=Caso.Prioridade.URGENTE, then=models.Value(0)),
@@ -450,9 +464,7 @@ def nao_compareceu(request, senha_id: str):
         .first()
     )
     if caso:
-        marca = timezone.localtime(agora).strftime('%d/%m/%Y %H:%M')
-        anotacao = f'[{marca}] {request.user.nome}: Não compareceu. {texto}'
-        caso.descricao = f'{caso.descricao}\n\n{anotacao}' if caso.descricao else anotacao
+        _acrescentar_ao_relato(caso, request.user, agora, f'Não compareceu. {texto}')
         caso.situacao = Caso.Situacao.CANCELADO
         caso.fechado_em = agora
         caso.atualizado_em = agora
@@ -562,9 +574,7 @@ def anotar_caso(request, caso_id: str):
 
     observacao = dados.validated_data['observacao'].strip()
     agora = timezone.now()
-    marca = timezone.localtime(agora).strftime('%d/%m/%Y %H:%M')
-    anotacao = f'[{marca}] {request.user.nome}: {observacao}'
-    caso.descricao = f'{caso.descricao}\n\n{anotacao}' if caso.descricao else anotacao
+    _acrescentar_ao_relato(caso, request.user, agora, observacao)
     caso.tecnico = request.user
     caso.atualizado_em = agora
     caso.save(update_fields=['descricao', 'tecnico', 'atualizado_em'])
@@ -593,7 +603,12 @@ def concluir(request, caso_id: str):
 
     agora = timezone.now()
     caso.situacao = dados.validated_data['situacao']
-    caso.descricao = dados.validated_data['relato']
+    # O relato final entra no histórico, não no lugar dele: substituir apagava a
+    # observação da recepção e toda a evolução anotada durante o atendimento.
+    _acrescentar_ao_relato(
+        caso, request.user, agora,
+        f'{Caso.Situacao(caso.situacao).label}. {dados.validated_data["relato"]}',
+    )
     caso.tecnico = request.user
     caso.fechado_em = agora
     caso.atualizado_em = agora

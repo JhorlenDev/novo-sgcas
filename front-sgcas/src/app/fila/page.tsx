@@ -315,7 +315,9 @@ export default function FilaPage() {
         method: "POST",
         body: JSON.stringify({
           situacao: "CONCLUIDO",
-          relato: relato.trim() || montarRegistroGuiado() || "Atendimento concluído sem observações adicionais.",
+          // O registro guiado já foi gravado como observação ao iniciar o atendimento, e a
+          // API acrescenta o relato ao histórico do caso: reenviá-lo aqui o duplicaria.
+          relato: relato.trim() || "Atendimento concluído sem observações adicionais.",
         }),
       });
       setAtendimento(null);
@@ -725,7 +727,7 @@ export default function FilaPage() {
                         className="input"
                         value={relato}
                         onChange={(event) => setRelato(event.target.value)}
-                        placeholder="Se quiser, escreva um resumo final. Se deixar vazio, os campos guiados viram o relato."
+                        placeholder="Se quiser, escreva um resumo final. A situação, a providência e as observações já ficam registradas no caso."
                       />
                     </Field>
                     <DialogFooter>
