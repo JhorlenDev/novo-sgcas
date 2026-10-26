@@ -118,7 +118,7 @@ class LimiteDasRotasDeEntrada(CenarioBase):
     def test_rotas_fora_da_lista_nao_sao_limitadas(self):
         cliente = _cliente('198.51.100.6')
         for _ in range(LIMITE_DO_LOGIN + 5):
-            self.assertEqual(cliente.get('/api/auth/me').status_code, 403)  # sem sessão, mas não 429
+            self.assertEqual(cliente.get('/api/auth/me').status_code, 401)  # sem sessão, mas não 429
 
     def test_libera_na_janela_seguinte(self):
         cliente = _cliente('198.51.100.7')

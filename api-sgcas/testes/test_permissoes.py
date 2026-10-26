@@ -17,7 +17,7 @@ class MatrizDePermissoes(CenarioBase):
         from django.test import Client
         anonimo = Client(headers={'host': 'localhost'})
         for rota in ['/api/auth/me', '/api/citizens/?busca=x', '/api/access-requests/']:
-            self.assertEqual(anonimo.get(rota).status_code, 403, rota)
+            self.assertEqual(anonimo.get(rota).status_code, 401, rota)
 
     def test_recepcao_busca_mas_nao_abre_prontuario(self):
         # Ela precisa encontrar a pessoa e ver o histórico para decidir; não
@@ -46,5 +46,5 @@ class MatrizDePermissoes(CenarioBase):
     def test_operador_desativado_e_recusado_em_tudo(self):
         # Desativar fecha a porta na hora, sem esperar a sessão expirar.
         r = self.rotas(self.inativo)
-        self.assertEqual(r['me'], 403)
-        self.assertEqual(r['buscar'], 403)
+        self.assertEqual(r['me'], 401)
+        self.assertEqual(r['buscar'], 401)

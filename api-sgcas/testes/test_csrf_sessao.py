@@ -75,7 +75,7 @@ class CsrfNasRotasDeSessao(CenarioBase):
         self.assertEqual(resposta.status_code, 200)
         self.assertIn('urlDeLogout', resposta.json())
         # A sessão morreu no servidor, não só no navegador.
-        self.assertEqual(navegador.get('/api/auth/me').status_code, 403)
+        self.assertEqual(navegador.get('/api/auth/me').status_code, 401)
 
     def test_sair_sem_token_continua_recusado(self):
         navegador = self._navegador(self.tecnico)

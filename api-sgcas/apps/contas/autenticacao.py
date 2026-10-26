@@ -15,6 +15,16 @@ CHAVE_ID_TOKEN = 'id_token'
 
 
 class SessaoDoTefeCidadao(authentication.BaseAuthentication):
+    def authenticate_header(self, request):
+        """
+        Sem este cabeçalho o DRF responde 403 a quem não tem sessão, igual a quem
+        tem sessão mas não tem permissão. O front só leva ao login quando recebe
+        401, então uma sessão que expirava no meio do uso deixava a tela cheia de
+        erros. "Session" é um esquema próprio: só Basic e Digest fazem o
+        navegador abrir a janela de usuário e senha.
+        """
+        return 'Session'
+
     def authenticate(self, request):
         operador_id = request.session.get(CHAVE_OPERADOR)
         if not operador_id:
