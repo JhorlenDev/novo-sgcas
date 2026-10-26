@@ -30,7 +30,12 @@ class Cifragem(SimpleTestCase):
     def test_texto_adulterado_e_recusado(self):
         cifrado = cripto.cifrar('529.982.247-25')
         partes = cifrado.split(':')
-        partes[3] = 'A' + partes[3][1:]
+        # Troca o primeiro caractere por um DIFERENTE dele. Trocar sempre por 'A'
+        # não adulterava nada em 1 de cada 64 execuções (quando o sorteado já era
+        # 'A'), e o teste falhava sem haver defeito algum.
+        primeiro = 'B' if partes[3][0] == 'A' else 'A'
+        partes[3] = primeiro + partes[3][1:]
+        self.assertNotEqual(':'.join(partes), cifrado)
         with self.assertRaises(cripto.ErroDeCripto):
             cripto.decifrar(':'.join(partes))
 
