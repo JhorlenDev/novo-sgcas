@@ -145,14 +145,61 @@ CATALOGO = [
 ]
 
 
+# A secretaria no topo da hierarquia. A sigla é a que o Tefé Cidadão recebe na
+# auditoria do pré-cadastro (`SEMAS/CRAS Centro`); o nome por extenso é o padrão
+# da sigla e pode ser ajustado depois na tela Institucional.
+RAIZ_SIGLA = 'SEMAS'
+RAIZ_NOME = 'Secretaria Municipal de Assistência Social'
+
+# As categorias que o catálogo acima cita, na ordem em que aparecem.
+CATEGORIAS = list(dict.fromkeys(
+    categoria for *_, servicos in CATALOGO for _, _, categoria in servicos if categoria
+))
+
+
 class Command(BaseCommand):
     help = 'Cadastra unidades e os serviços que elas ofertam (idempotente).'
+
+    def _garantir_raiz(self, agora):
+        """
+        A coordenação de topo, criada só em banco sem nenhuma coordenação.
+
+        Num ambiente novo ela não existe, e as unidades nasceriam soltas — sem o
+        prefixo `SEMAS/` que identifica a secretaria na auditoria. Se já há
+        coordenações, a estrutura é de quem a cadastrou e não se mexe.
+        """
+        raiz = Coordenacao.objects.filter(superior__isnull=True).first()
+        if raiz is not None or Coordenacao.objects.exists():
+            return raiz, False
+        raiz = Coordenacao.objects.create(
+            id=str(uuid.uuid4()), nome=RAIZ_NOME, sigla=RAIZ_SIGLA,
+            criada_em=agora, atualizada_em=agora,
+        )
+        return raiz, True
+
+    def _garantir_demandas(self, agora):
+        """
+        As demandas que o catálogo cita, criando só as que faltam (pelo nome).
+
+        Sem elas o serviço é cadastrado mesmo assim, mas sem categoria — e não
+        entra na soma do relatório da rede. Uma demanda de mesmo nome que já
+        exista é reaproveitada como está.
+        """
+        demandas = {d.nome: d for d in Demanda.objects.all()}
+        criadas = 0
+        for nome in CATEGORIAS:
+            if nome not in demandas:
+                demandas[nome] = Demanda.objects.create(
+                    id=str(uuid.uuid4()), nome=nome, criada_em=agora, atualizada_em=agora,
+                )
+                criadas += 1
+        return demandas, criadas
 
     @transaction.atomic
     def handle(self, *args, **opcoes):
         agora = timezone.now()
-        raiz = Coordenacao.objects.filter(superior__isnull=True).first()
-        demandas = {d.nome: d for d in Demanda.objects.all()}
+        raiz, raiz_criada = self._garantir_raiz(agora)
+        demandas, demandas_criadas = self._garantir_demandas(agora)
 
         criadas = atualizadas = servicos_novos = sem_categoria = 0
 
@@ -167,6 +214,13 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS(f'  unidade criada: {nome}'))
             else:
                 atualizadas += 1
+                # Unidade criada por uma versão anterior deste comando, antes de
+                # ele garantir a raiz: fica sem secretaria e sem o prefixo da
+                # auditoria. Só preenche o vazio; nunca troca uma coordenação.
+                if unidade.coordenacao_id is None and raiz is not None:
+                    unidade.coordenacao = raiz
+                    unidade.atualizada_em = agora
+                    unidade.save(update_fields=['coordenacao', 'atualizada_em'])
 
             for nome_servico, descricao, categoria in servicos:
                 demanda = demandas.get(categoria) if categoria else None
@@ -177,14 +231,22 @@ class Command(BaseCommand):
                 if demanda is None:
                     sem_categoria += 1
 
+                # O id só existe na criação: em `defaults` ele trocaria a chave
+                # primária de um serviço já cadastrado, e os casos que apontam
+                # para ele ficariam soltos.
+                dados = {'descricao': descricao, 'demanda': demanda, 'ativo': True}
                 _, novo = Servico.objects.update_or_create(
                     unidade=unidade, nome=nome_servico,
-                    defaults={'id': str(uuid.uuid4()), 'descricao': descricao,
-                              'demanda': demanda, 'ativo': True},
+                    defaults=dados, create_defaults={'id': str(uuid.uuid4()), **dados},
                 )
                 servicos_novos += int(novo)
 
         self.stdout.write('')
+        if raiz_criada:
+            self.stdout.write(self.style.SUCCESS(
+                f'coordenação raiz criada: {RAIZ_SIGLA} — {RAIZ_NOME}'
+            ))
+        self.stdout.write(f'demandas criadas    : {demandas_criadas}')
         self.stdout.write(f'unidades criadas    : {criadas}')
         self.stdout.write(f'unidades existentes : {atualizadas}')
         self.stdout.write(f'serviços novos      : {servicos_novos}')

@@ -1,0 +1,130 @@
+"""
+`cadastrar_servicos`: montar o catálogo do zero e poder rodar de novo.
+
+O README manda rodar o comando a cada deploy, então ele precisa ser
+idempotente de verdade. E num banco novo ele não pode depender de dados que só
+existiam no sistema anterior — demandas e a coordenação raiz — senão os
+serviços ficam sem categoria e as unidades sem o prefixo da secretaria.
+"""
+import uuid
+from io import StringIO
+
+from django.core.management import call_command
+from django.test import TestCase
+from django.utils import timezone
+
+from apps.institucional.management.commands.cadastrar_servicos import CATALOGO
+from apps.institucional.models import Coordenacao, Demanda, Servico, Unidade
+
+CATEGORIAS_CITADAS = {s[2] for _, _, _, servicos in CATALOGO for s in servicos if s[2]}
+SERVICOS_SEM_CATEGORIA = sum(1 for _, _, _, servicos in CATALOGO for s in servicos if s[2] is None)
+
+
+def rodar() -> str:
+    saida = StringIO()
+    call_command('cadastrar_servicos', stdout=saida)
+    return saida.getvalue()
+
+
+class RodarDeNovoNaoQuebraNemDuplica(TestCase):
+    def test_segunda_execucao_nao_levanta_erro(self):
+        rodar()
+        rodar()
+
+    def test_nao_duplica_unidades_nem_servicos(self):
+        rodar()
+        antes = (Unidade.objects.count(), Servico.objects.count(), Demanda.objects.count())
+        rodar()
+        self.assertEqual((Unidade.objects.count(), Servico.objects.count(), Demanda.objects.count()), antes)
+
+    def test_servicos_mantem_o_id(self):
+        # O id é referenciado por casos; trocá-lo a cada deploy soltaria o vínculo.
+        rodar()
+        antes = dict(Servico.objects.values_list('nome', 'id').filter(unidade__sigla='CRAS-C'))
+        rodar()
+        depois = dict(Servico.objects.values_list('nome', 'id').filter(unidade__sigla='CRAS-C'))
+        self.assertEqual(antes, depois)
+
+    def test_atualiza_o_que_mudou(self):
+        rodar()
+        servico = Servico.objects.filter(unidade__sigla='CRAS-C').first()
+        Servico.objects.filter(pk=servico.pk).update(descricao='alterada à mão', ativo=False)
+        rodar()
+        servico.refresh_from_db()
+        self.assertNotEqual(servico.descricao, 'alterada à mão')
+        self.assertTrue(servico.ativo)
+
+
+class BancoNovoRecebeOsDadosBase(TestCase):
+    def test_cria_as_demandas_que_o_catalogo_cita(self):
+        rodar()
+        self.assertEqual(set(Demanda.objects.values_list('nome', flat=True)), CATEGORIAS_CITADAS)
+
+    def test_servicos_saem_categorizados(self):
+        rodar()
+        self.assertEqual(Servico.objects.filter(demanda__isnull=True).count(), SERVICOS_SEM_CATEGORIA)
+
+    def test_nao_avisa_categoria_inexistente(self):
+        self.assertNotIn('não existe no catálogo de demandas', rodar())
+
+    def test_cria_a_coordenacao_raiz_e_as_unidades_levam_o_prefixo(self):
+        rodar()
+        raiz = Coordenacao.objects.get(superior__isnull=True)
+        self.assertEqual(raiz.sigla, 'SEMAS')
+        centro = Unidade.objects.get(sigla='CRAS-C')
+        self.assertEqual(centro.coordenacao_id, raiz.id)
+        # É o rótulo que vai para a auditoria do pré-cadastro no Tefé Cidadão.
+        self.assertEqual(centro.nome_qualificado(), 'SEMAS/CRAS Centro')
+
+    def test_roda_de_novo_sem_criar_outra_raiz(self):
+        rodar()
+        rodar()
+        self.assertEqual(Coordenacao.objects.count(), 1)
+
+
+class BancoComDadosNaoEAtropelado(TestCase):
+    def test_respeita_a_coordenacao_existente(self):
+        agora = timezone.now()
+        existente = Coordenacao.objects.create(
+            id=str(uuid.uuid4()), nome='Outra Secretaria', sigla='OUTRA',
+            criada_em=agora, atualizada_em=agora,
+        )
+        rodar()
+        self.assertEqual(Coordenacao.objects.count(), 1)
+        self.assertEqual(Unidade.objects.get(sigla='CRAS-C').coordenacao_id, existente.id)
+
+    def test_reaproveita_a_demanda_de_mesmo_nome(self):
+        agora = timezone.now()
+        existente = Demanda.objects.create(
+            id=str(uuid.uuid4()), nome='Benefício Eventual', categoria='BENEFICIO',
+            criada_em=agora, atualizada_em=agora,
+        )
+        rodar()
+        self.assertEqual(Demanda.objects.filter(nome='Benefício Eventual').count(), 1)
+        existente.refresh_from_db()
+        self.assertEqual(existente.categoria, 'BENEFICIO')
+        self.assertTrue(Servico.objects.filter(demanda=existente).exists())
+
+    def test_liga_a_raiz_a_unidade_que_ficou_sem_coordenacao(self):
+        # Estado deixado pela versão anterior do comando num banco novo.
+        agora = timezone.now()
+        Unidade.objects.create(
+            id=str(uuid.uuid4()), nome='CRAS Centro', sigla='CRAS-C', tipo='CRAS',
+            criada_em=agora, atualizada_em=agora,
+        )
+        rodar()
+        centro = Unidade.objects.get(sigla='CRAS-C')
+        self.assertEqual(centro.nome_qualificado(), 'SEMAS/CRAS Centro')
+
+    def test_nao_troca_a_coordenacao_de_uma_unidade_ja_ligada(self):
+        agora = timezone.now()
+        propria = Coordenacao.objects.create(
+            id=str(uuid.uuid4()), nome='Outra Secretaria', sigla='OUTRA',
+            criada_em=agora, atualizada_em=agora,
+        )
+        Unidade.objects.create(
+            id=str(uuid.uuid4()), nome='CRAS Centro', sigla='CRAS-C', tipo='CRAS',
+            coordenacao=propria, criada_em=agora, atualizada_em=agora,
+        )
+        rodar()
+        self.assertEqual(Unidade.objects.get(sigla='CRAS-C').coordenacao_id, propria.id)
