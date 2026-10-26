@@ -27,7 +27,12 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-sgcas}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-sgcas}
     ports:
-      - '${API_PORT:-8000}:8000'
+      # Só no loopback por padrão. A API não pode ser alcançada sem passar pelo
+      # nginx e pelo Next: o IP do cliente (limite de requisições e auditoria)
+      # vem do X-Forwarded-For, e quem fala direto com a API o escreve inteiro.
+      # Com o Next em outra máquina, defina API_BIND_ADDRESS com o IP da
+      # interface PRIVADA dela — nunca 0.0.0.0.
+      - '${API_BIND_ADDRESS:-127.0.0.1}:${API_PORT:-8000}:8000'
     volumes:
       - ./armazenamento:/app/armazenamento
     healthcheck:

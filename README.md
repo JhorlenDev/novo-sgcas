@@ -242,6 +242,7 @@ O modelo completo está em [`api-sgcas/.env.example`](api-sgcas/.env.example).
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Credenciais do PostgreSQL no Compose |
 | `POSTGRES_PORT` | Porta local do banco no `compose.dev.yml` |
 | `API_PORT` | Porta publicada da API Docker; padrão `8000` |
+| `API_BIND_ADDRESS` | Interface em que a porta da API Docker é publicada; padrão `127.0.0.1`. Só o Next e o nginx da mesma máquina a alcançam. Nunca use `0.0.0.0` em produção |
 | `PII_ENCRYPTION_ENABLED` | Ativa cifragem de dados pessoais |
 | `PII_ENCRYPTION_KEY`, `PII_HMAC_KEY` | Chaves distintas de cifragem e índice de busca |
 | `PRECADASTRO_ENABLED` | Ativa integração de pré-cadastro no Tefé Cidadão |
@@ -308,7 +309,7 @@ Há também scripts de navegador em `front-sgcas/scripts/`. Eles têm requisitos
 
 O frontend deve ser mantido por um gerenciador de processos ou plataforma de hospedagem. O Compose atual fornece a API e o banco; não inclui frontend, Keycloak nem terminação TLS.
 
-**O IP do cliente e a exposição da API.** O IP usado no limite de requisições e na auditoria vem do `X-Forwarded-For` que o proxy reverso (nginx ou similar) acrescenta; o Next o repassa, mas não o acrescenta. Configure o proxy com `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` e mantenha `TRUSTED_PROXIES` igual ao número de proxies reversos. Sem isso todos aparecem com o mesmo IP. A API também não deve ser alcançável sem passar por eles: quem chega direto à porta da API escreve o cabeçalho inteiro e se passa por outro IP. O Compose publica a porta `8000` em todas as interfaces; em produção restrinja-a (por exemplo `127.0.0.1:8000:8000`, ou firewall). A tabela dos contadores do limite é criada pelo `migrate`.
+**O IP do cliente e a exposição da API.** O IP usado no limite de requisições e na auditoria vem do `X-Forwarded-For` que o proxy reverso (nginx ou similar) acrescenta; o Next o repassa, mas não o acrescenta. Configure o proxy com `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` e mantenha `TRUSTED_PROXIES` igual ao número de proxies reversos. Sem isso todos aparecem com o mesmo IP. A API também não deve ser alcançável sem passar por eles: quem chega direto à porta da API escreve o cabeçalho inteiro e se passa por outro IP. Por isso o Compose publica a porta da API apenas em `127.0.0.1` (`API_BIND_ADDRESS`); se o Next ficar em outra máquina, informe o IP da interface privada dela, nunca `0.0.0.0`, e proteja a porta também com firewall. A tabela dos contadores do limite é criada pelo `migrate`.
 
 **Limitação do healthcheck atual:** o Compose consulta um endpoint institucional protegido. Uma resposta `401` ou um redirecionamento HTTPS pode marcar o container como `unhealthy` mesmo com o processo ativo. Confira os logs e valide a configuração antes de usar esse sinal para reinício automático ou prontidão de produção.
 
