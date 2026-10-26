@@ -53,14 +53,31 @@ def _prefixo_da_senha(prioridade: str) -> str:
 
 
 def _proxima_senha(unidade_id: str, prioridade: str) -> str:
+    """
+    Próxima senha do dia da unidade, na sequência do prefixo da prioridade.
+
+    Tem de rodar dentro de uma transação. A numeração lê o que já existe e soma
+    um, e duas recepções fazendo isso ao mesmo tempo liam o mesmo número e
+    geravam a mesma senha — duas pessoas na fila com "NR003". A linha da
+    unidade é travada até o fim da transação, então a segunda recepção só lê
+    depois que a primeira gravou.
+
+    Parte do maior número já usado, e não da contagem de linhas: se uma senha
+    sumir da sequência (correção manual), contar repetiria um número em uso.
+    """
+    Unidade.objects.select_for_update().only('id').get(pk=unidade_id)
+
     hoje = timezone.localtime(timezone.now()).date()
     prefixo = _prefixo_da_senha(prioridade)
-    atendidos = SenhaDaFila.objects.filter(
+    usadas = SenhaDaFila.objects.filter(
         unidade_id=unidade_id,
         criado_em__date=hoje,
         senha__startswith=prefixo,
-    ).count()
-    return f'{prefixo}{atendidos + 1:03d}'
+    ).values_list('senha', flat=True)
+    numeros = (
+        int(senha[len(prefixo):]) for senha in usadas if senha[len(prefixo):].isdigit()
+    )
+    return f'{prefixo}{max(numeros, default=0) + 1:03d}'
 
 
 def _ordem_de_prioridade():
