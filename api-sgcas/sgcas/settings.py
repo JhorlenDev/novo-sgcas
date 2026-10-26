@@ -36,6 +36,13 @@ if not DEBUG and SECRET_KEY == 'inseguro-apenas-para-desenvolvimento':
         'Gere uma com: python -c "import secrets; print(secrets.token_urlsafe(64))"'
     )
 
+# DEV-LOGIN: entrada sem Keycloak, só para desenvolvimento. Ver apps/contas/dev_login.py.
+# Ligada fora de DEBUG ela abriria um atalho de autenticação em produção, então
+# o boot falha em vez de subir assim.
+DEV_LOGIN_ENABLED = env.bool('DEV_LOGIN_ENABLED', default=False)
+if DEV_LOGIN_ENABLED and not DEBUG:
+    raise RuntimeError('DEV_LOGIN_ENABLED só pode ser usado com DEBUG=True.')
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
