@@ -117,6 +117,14 @@ TIME_ZONE = 'America/Manaus'
 USE_I18N = True
 USE_TZ = True
 
+# Quantos proxies reversos (nginx ou similar, na frente do Next) acrescentam ao
+# X-Forwarded-For. O proxy de rewrites do Next NÃO acrescenta: repassa o que veio.
+# Em desenvolvimento não há proxy reverso, e acreditar no cabeçalho deixaria
+# qualquer um escolher o próprio IP. Em produção ele é obrigatório (sem ele o
+# X-Forwarded-Proto não chega e o redirecionamento HTTPS entra em laço), então
+# 1 é o padrão. Ver apps/comum/rede.py.
+TRUSTED_PROXIES = env.int('TRUSTED_PROXIES', default=0 if DEBUG else 1)
+
 # ─── Segurança em produção ───
 #
 # Tudo condicionado a DEBUG: em desenvolvimento o servidor é HTTP, e exigir
@@ -145,6 +153,19 @@ SESSION_SAVE_EVERY_REQUEST = True
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# O cache `limites` guarda os contadores do ThrottleAuth numa tabela do Postgres,
+# compartilhada por todos os workers do gunicorn (a tabela e criada pela migration
+# contas.0002). O `default` segue em memoria: serve ao throttle geral do DRF, onde
+# um limite por processo e aceitavel.
+CACHES = {
+    'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'},
+    'limites': {
+        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+        'LOCATION': 'cache_limites',
+        'OPTIONS': {'MAX_ENTRIES': 10000},
+    },
+}
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': ['apps.contas.autenticacao.SessaoDoTefeCidadao'],
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
@@ -157,6 +178,8 @@ REST_FRAMEWORK = {
         'anon': '60/minute',
         'user': '120/minute',
     },
+    # Sem isto o throttle anônimo usaria o X-Forwarded-For inteiro como chave.
+    'NUM_PROXIES': TRUSTED_PROXIES,
 }
 
 LOGGING = {

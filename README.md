@@ -238,6 +238,7 @@ O modelo completo está em [`api-sgcas/.env.example`](api-sgcas/.env.example).
 | `CORS_ORIGIN` | Configuração lida pelo projeto; o fluxo do frontend usa proxy de mesma origem |
 | `KEYCLOAK_*` | Configuração de identidade, cliente e callback |
 | `LOCAL_STORAGE_PATH` | Diretório persistente de anexos |
+| `TRUSTED_PROXIES` | Quantos proxies reversos (nginx etc., na frente do Next) acrescentam o IP do cliente ao `X-Forwarded-For`; o Next não acrescenta. Padrão: `0` com `DEBUG=True` e `1` com `DEBUG=False`. Define o IP usado no limite de requisições e na auditoria |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Credenciais do PostgreSQL no Compose |
 | `POSTGRES_PORT` | Porta local do banco no `compose.dev.yml` |
 | `API_PORT` | Porta publicada da API Docker; padrão `8000` |
@@ -306,6 +307,8 @@ Há também scripts de navegador em `front-sgcas/scripts/`. Eles têm requisitos
    ```
 
 O frontend deve ser mantido por um gerenciador de processos ou plataforma de hospedagem. O Compose atual fornece a API e o banco; não inclui frontend, Keycloak nem terminação TLS.
+
+**O IP do cliente e a exposição da API.** O IP usado no limite de requisições e na auditoria vem do `X-Forwarded-For` que o proxy reverso (nginx ou similar) acrescenta; o Next o repassa, mas não o acrescenta. Configure o proxy com `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` e mantenha `TRUSTED_PROXIES` igual ao número de proxies reversos. Sem isso todos aparecem com o mesmo IP. A API também não deve ser alcançável sem passar por eles: quem chega direto à porta da API escreve o cabeçalho inteiro e se passa por outro IP. O Compose publica a porta `8000` em todas as interfaces; em produção restrinja-a (por exemplo `127.0.0.1:8000:8000`, ou firewall). A tabela dos contadores do limite é criada pelo `migrate`.
 
 **Limitação do healthcheck atual:** o Compose consulta um endpoint institucional protegido. Uma resposta `401` ou um redirecionamento HTTPS pode marcar o container como `unhealthy` mesmo com o processo ativo. Confira os logs e valide a configuração antes de usar esse sinal para reinício automático ou prontidão de produção.
 

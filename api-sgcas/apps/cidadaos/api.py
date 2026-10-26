@@ -32,6 +32,7 @@ from apps.atendimentos.serializers import (
 )
 from apps.atendimentos import historico
 from apps.auditoria.redacao import redigir
+from apps.comum.rede import ip_do_cliente
 from apps.cidadaos.models import Cidadao
 from apps.cidadaos.serializers import (
     CidadaoNaListaSerializer,
@@ -66,17 +67,10 @@ def _registrar_auditoria(request, acao, entidade, entidade_id, dados_novos=None,
         entidade_id=entidade_id,
         dados_antes=redigir(dados_antes) if dados_antes else None,
         dados_depois=redigir(dados_novos) if dados_novos else None,
-        endereco_ip=_ip(request),
+        endereco_ip=ip_do_cliente(request),
         navegador=(request.META.get('HTTP_USER_AGENT') or '')[:400] or None,
         criado_em=timezone.now(),
     ).save(force_insert=True)
-
-
-def _ip(request):
-    encaminhado = request.META.get('HTTP_X_FORWARDED_FOR')
-    if encaminhado:
-        return encaminhado.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR')
 
 
 def _protocolo_do_prontuario():

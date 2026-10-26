@@ -16,6 +16,7 @@ from django.utils import timezone
 
 from apps.auditoria.models import RegistroDeAuditoria
 from apps.auditoria.redacao import redigir
+from apps.comum.rede import ip_do_cliente
 
 logger = logging.getLogger(__name__)
 
@@ -100,13 +101,7 @@ class TrilhaDeAuditoria:
             entidade=entidade,
             entidade_id=entidade_id,
             dados_depois=redigir(corpo) if corpo else None,
-            endereco_ip=self._ip(request),
+            endereco_ip=ip_do_cliente(request),
             navegador=(request.META.get('HTTP_USER_AGENT') or '')[:400] or None,
             criado_em=timezone.now(),
         ).save(force_insert=True)
-
-    def _ip(self, request) -> str | None:
-        encaminhado = request.META.get('HTTP_X_FORWARDED_FOR')
-        if encaminhado:
-            return encaminhado.split(',')[0].strip()
-        return request.META.get('REMOTE_ADDR')
