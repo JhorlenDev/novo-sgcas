@@ -28,6 +28,8 @@ from pathlib import Path
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
+from django.utils.text import slugify
 from PIL import Image, ImageOps
 
 class TipoDeDocumento(models.TextChoices):
@@ -169,7 +171,27 @@ def guardar(cidadao_id: str, arquivo, tipo_documento: str) -> dict:
         'miniatura': miniatura,
         'mime': tipo,
         'tamanho': len(principal),
+        # O nome original não é guardado (carrega dado pessoal); a lista da tela
+        # distingue os documentos por tipo, tamanho e data de envio.
+        'enviado_em': timezone.now().isoformat(),
     }
+
+
+def nome_para_download(anexo: dict, miniatura: bool = False) -> str:
+    """
+    Nome legível e neutro para quem baixa o documento: `rg-frente.jpg`.
+
+    Vem do tipo do documento. O nome original do arquivo não é guardado (carrega
+    dado pessoal com frequência) e o nome em disco é um UUID. Anexos de antes do
+    vocabulário fechado podem ter qualquer texto no tipo; o `slugify` o reduz a
+    letras, números e hífens, o que também o mantém inofensivo num cabeçalho HTTP.
+    """
+    tipo = str(anexo.get('tipo_documento') or '')
+    rotulo = dict(TipoDeDocumento.choices).get(tipo, tipo)
+    base = slugify(str(rotulo)) or 'documento'
+    if miniatura:
+        return f'{base}-miniatura.jpg'
+    return f'{base}.pdf' if anexo.get('mime') == 'application/pdf' else f'{base}.jpg'
 
 
 def caminho(cidadao_id: str, anexo: dict, miniatura: bool = False) -> Path:

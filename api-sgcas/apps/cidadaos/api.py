@@ -187,6 +187,10 @@ def prontuario(request, cidadao_id: str):
         'encaminhamentos': EncaminhamentoSerializer(encaminhamentos, many=True).data,
         'senhas': SenhaSerializer(senhas, many=True).data,
         'anexos': anexos,
+        # O catálogo vem da API: a tela não mantém uma segunda lista de tipos.
+        'tipos_de_anexo': [
+            {'valor': valor, 'rotulo': rotulo} for valor, rotulo in arquivos.TipoDeDocumento.choices
+        ],
         'membros_da_familia': cidadao.membros_da_familia or [],
         'socioeconomico': cidadao.socioeconomico or {},
         'documentos': cidadao.documentos or {},
@@ -620,7 +624,12 @@ def baixar_anexo(request, cidadao_id: str, anexo_id: str):
         return Response({'detalhe': str(erro)}, status=status.HTTP_404_NOT_FOUND)
 
     mime = 'image/jpeg' if quer_miniatura else anexo.get('mime', 'application/octet-stream')
-    return FileResponse(caminho.open('rb'), content_type=mime)
+    # O nome vem do tipo do documento: sem isso o FileResponse manda o nome
+    # gravado em disco (um UUID), e o cabeçalho vence o atributo `download` da tela.
+    return FileResponse(
+        caminho.open('rb'), content_type=mime,
+        filename=arquivos.nome_para_download(anexo, miniatura=quer_miniatura),
+    )
 
 
 @api_view(['DELETE'])

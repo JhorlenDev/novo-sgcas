@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CalendarClock, ClipboardList, FileArchive, Gift, Home, Plus, Send, ShieldCheck, Stethoscope, UsersRound } from "lucide-react";
+import { ArrowLeft, CalendarClock, ClipboardList, Gift, Home, Plus, Send, ShieldCheck, Stethoscope, UsersRound } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, SecondaryButton, Select } from "@/components/ui";
 import { api } from "@/lib/api";
+import { AnexosPanel } from "./anexos-panel";
 import type { AtendimentoRecepcao, BeneficioEventual, Caso, Cidadao, Encaminhamento, EntradaHistorico, ProntuarioCidadao, Senha, Unidade } from "@/types/sgcas";
 
 export default function ProntuarioPage() {
@@ -97,7 +98,7 @@ export default function ProntuarioPage() {
           </div>
 
           <div className="grid gap-5 xl:grid-cols-2">
-            <AnexosPanel anexos={prontuario.anexos} />
+            <AnexosPanel cidadaoId={cidadao.id} anexos={prontuario.anexos} tipos={prontuario.tipos_de_anexo} onChanged={carregarProntuario} />
             <HistoricoPanel historico={prontuario.historico} />
           </div>
 
@@ -376,10 +377,6 @@ function EncaminhamentosPanel({ cidadao, casos, encaminhamentos, unidades, onSav
       <ListaOuVazio itens={encaminhamentos.map((e) => ({ id: e.id, title: `${e.unidade_destino_nome || e.destino_externo} · ${rotuloSituacaoEncaminhamento(e.situacao)}`, detail: `${formatarDataHora(e.criado_em)} · ${e.motivo}${e.observacoes ? ` · ${e.observacoes}` : ""}` }))} vazio="Encaminhamentos internos ou externos aparecem aqui." />
     </Card>
   );
-}
-
-function AnexosPanel({ anexos }: { anexos: Record<string, unknown>[] }) {
-  return <Card><Titulo icon={FileArchive} title="Documentos anexados" count={anexos.length} /><ListaOuVazio itens={anexos.map((a, i) => ({ id: valor(a.id) || String(i), title: valor(a.nome_original) || valor(a.nome_arquivo) || `Documento ${i + 1}`, detail: [valor(a.tipo_documento), valor(a.mime), valor(a.data_envio)].filter(Boolean).join(" · ") }))} vazio="Documentos enviados ao prontuário aparecem aqui." /></Card>;
 }
 
 function HistoricoPanel({ historico }: { historico: EntradaHistorico[] }) {

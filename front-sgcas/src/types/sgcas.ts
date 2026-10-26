@@ -185,6 +185,20 @@ export type EntradaHistorico = {
   e_de_outra_unidade: boolean;
 };
 
+export type Anexo = {
+  id: string;
+  tipo_documento: string;
+  mime: string;
+  tamanho: number;
+  // Anexos anteriores ao registro da data não a têm.
+  enviado_em?: string | null;
+};
+
+export type TipoDeAnexo = {
+  valor: string;
+  rotulo: string;
+};
+
 export type ProntuarioCidadao = {
   cidadao: Cidadao;
   historico: EntradaHistorico[];
@@ -193,7 +207,8 @@ export type ProntuarioCidadao = {
   beneficios_eventuais: BeneficioEventual[];
   encaminhamentos: Encaminhamento[];
   senhas: Senha[];
-  anexos: Record<string, unknown>[];
+  anexos: Anexo[];
+  tipos_de_anexo: TipoDeAnexo[];
   membros_da_familia: Record<string, unknown>[];
   socioeconomico: Record<string, unknown>;
   documentos: Record<string, unknown>;
