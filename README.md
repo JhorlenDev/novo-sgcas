@@ -232,9 +232,9 @@ O modelo completo está em [`api-sgcas/.env.example`](api-sgcas/.env.example).
 | --- | --- |
 | `DEBUG` | `True` no desenvolvimento; `False` na produção |
 | `DJANGO_SECRET_KEY` | Chave secreta do Django, exclusiva do ambiente |
-| `ALLOWED_HOSTS` | Hosts aceitos pela API, separados por vírgula |
+| `ALLOWED_HOSTS` | Hosts aceitos pela API, separados por vírgula. Atrás do Next, o host de `SGCAS_API_URL` (por exemplo `localhost`), pois o Next troca o `Host` |
 | `DATABASE_URL` | Conexão PostgreSQL da API local |
-| `FRONTEND_URL` | Destino do navegador após autenticação |
+| `FRONTEND_URL` | Destino do navegador após autenticação e origem aceita pela proteção CSRF; em produção, a origem pública com `https` |
 | `CORS_ORIGIN` | Configuração lida pelo projeto; o fluxo do frontend usa proxy de mesma origem |
 | `KEYCLOAK_*` | Configuração de identidade, cliente e callback |
 | `LOCAL_STORAGE_PATH` | Diretório persistente de anexos |
@@ -284,8 +284,8 @@ Há também scripts de navegador em `front-sgcas/scripts/`. Eles têm requisitos
 
 ## Produção
 
-1. Configure domínios, HTTPS e proxy reverso. Com `DEBUG=False`, a API exige HTTPS e usa cookies seguros. O proxy deve encaminhar corretamente `X-Forwarded-Proto`.
-2. Preencha segredos reais, `ALLOWED_HOSTS`, `FRONTEND_URL` e callback do Keycloak. Nunca publique `.env`.
+1. Configure domínios, HTTPS e proxy reverso. Use [`deploy/nginx/sgcas.conf`](deploy/nginx/sgcas.conf) como ponto de partida (testada no nginx 1.30): troque o domínio e os caminhos dos certificados, copie para `/etc/nginx/conf.d/`, rode `nginx -t` e recarregue. Com `DEBUG=False`, a API exige HTTPS e usa cookies seguros; o proxy deve encaminhar `X-Forwarded-Proto` e `X-Forwarded-For`, como essa configuração faz.
+2. Preencha segredos reais, `ALLOWED_HOSTS`, `FRONTEND_URL` e callback do Keycloak. Nunca publique `.env`. Atenção a dois valores: `ALLOWED_HOSTS` deve conter o host de `SGCAS_API_URL` (por exemplo `localhost`), **não** o domínio público, porque o Next troca o `Host` ao encaminhar para a API; e `FRONTEND_URL` deve ser a origem pública com `https` (por exemplo `https://sgcas.exemplo.gov.br`), pois também define a origem aceita pela proteção CSRF.
 3. Faça backup do PostgreSQL, dos anexos e das chaves de cifragem, quando utilizadas.
 4. Construa a API e execute as migrations **antes** de iniciar a nova versão:
 
@@ -304,14 +304,14 @@ Há também scripts de navegador em `front-sgcas/scripts/`. Eles têm requisitos
    cd front-sgcas
    npm ci
    SGCAS_API_URL=http://localhost:8000 npm run build
-   npm run start
+   npm run start -- -H 127.0.0.1
    ```
 
-O frontend deve ser mantido por um gerenciador de processos ou plataforma de hospedagem. O Compose atual fornece a API e o banco; não inclui frontend, Keycloak nem terminação TLS.
+O frontend deve ser mantido por um gerenciador de processos ou plataforma de hospedagem, escutando só no loopback (`-H 127.0.0.1`): o Next repassa o `X-Forwarded-For` que recebe, então quem o alcançasse direto escolheria o próprio IP. O Compose atual fornece a API e o banco; não inclui frontend, Keycloak nem terminação TLS (o nginx acima cuida do TLS).
 
-**O IP do cliente e a exposição da API.** O IP usado no limite de requisições e na auditoria vem do `X-Forwarded-For` que o proxy reverso (nginx ou similar) acrescenta; o Next o repassa, mas não o acrescenta. Configure o proxy com `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` e mantenha `TRUSTED_PROXIES` igual ao número de proxies reversos. Sem isso todos aparecem com o mesmo IP. A API também não deve ser alcançável sem passar por eles: quem chega direto à porta da API escreve o cabeçalho inteiro e se passa por outro IP. Por isso o Compose publica a porta da API apenas em `127.0.0.1` (`API_BIND_ADDRESS`); se o Next ficar em outra máquina, informe o IP da interface privada dela, nunca `0.0.0.0`, e proteja a porta também com firewall. A tabela dos contadores do limite é criada pelo `migrate`.
+**O IP do cliente e a exposição da API.** O IP usado no limite de requisições e na auditoria vem do `X-Forwarded-For`. O proxy de rewrites do Next não o acrescenta, só o repassa; quem o define é o nginx, que na configuração do repositório **substitui** o cabeçalho pelo endereço que viu conectar (`proxy_set_header X-Forwarded-For $remote_addr;`), descartando o que o cliente enviou. Mantenha `TRUSTED_PROXIES` igual ao número de proxies reversos (1 com só o nginx; 2 com um balanceador antes dele, caso em que a configuração do nginx traz o ajuste necessário). Sem isso todos aparecem com o mesmo IP. O Next e a API também não devem ser alcançáveis sem passar pelo nginx: quem chega direto a eles escreve o cabeçalho inteiro e se passa por outro IP. Por isso o Compose publica a porta da API apenas em `127.0.0.1` (`API_BIND_ADDRESS`); se o Next ficar em outra máquina, informe o IP da interface privada dela, nunca `0.0.0.0`, e proteja a porta também com firewall. A tabela dos contadores do limite é criada pelo `migrate`.
 
-**Limitação do healthcheck atual:** o Compose consulta um endpoint institucional protegido. Uma resposta `401` ou um redirecionamento HTTPS pode marcar o container como `unhealthy` mesmo com o processo ativo. Confira os logs e valide a configuração antes de usar esse sinal para reinício automático ou prontidão de produção.
+**Healthcheck.** O Compose consulta `GET /api/health`, que confere o banco e responde `200` (`{"status":"ok"}`) ou `503`. Ele é tratado antes da validação de host e do redirecionamento HTTPS, então funciona de dentro do container em HTTP puro e só conta `200` como saudável. Serve também para monitoramento externo (passa pelo nginx e pelo Next como qualquer rota `/api`).
 
 ### Cifragem de dados pessoais
 
@@ -337,12 +337,12 @@ Em uma base existente, essa atualização também prepara os índices de busca p
 | Conexão recusada em `5434` | Suba o banco com `compose.dev.yml` e confira `POSTGRES_PORT` |
 | Autenticação do PostgreSQL falha | Senha de `DATABASE_URL` e `POSTGRES_PASSWORD`; mudar `.env` não altera a senha de um volume já inicializado |
 | Relação/coluna inexistente | Execute `python manage.py migrate` no banco correto |
-| API retorna `400` | Confira `ALLOWED_HOSTS` e o host usado pelo proxy |
+| API retorna `400` | Confira `ALLOWED_HOSTS`: ele precisa conter o host de `SGCAS_API_URL` (o Next troca o `Host`), não o domínio público |
 | Login rejeita callback | Compare a URI exata no Keycloak e no `.env`, incluindo porta |
 | Tela de aguardando liberação | A conta ainda não recebeu uma role SGCAS válida |
 | Operador não vê fila/casos | Confira perfil, unidade vinculada e escopo de acesso |
 | Frontend não alcança a API | Confira processo da API, porta e `SGCAS_API_URL`; refaça o build se mudou o destino em produção |
-| Docker mostra `unhealthy` | Consulte logs e a limitação do healthcheck descrita acima |
+| Docker mostra `unhealthy` | `GET /api/health` devolve `503` quando o banco não responde: confira o PostgreSQL e os logs da API |
 | CPF/NIS não encontra cadastro após ativar cifragem | Execute o backfill `cifrar_dados_pessoais` com as chaves corretas |
 
 ## Documentação

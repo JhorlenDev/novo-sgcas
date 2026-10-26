@@ -116,7 +116,7 @@ endpoints que usam as colunas novas falham em tempo de requisição.
 | Variável | Observação |
 | --- | --- |
 | `DEBUG` | `False` |
-| `ALLOWED_HOSTS` | domínio real da API |
+| `ALLOWED_HOSTS` | host de `SGCAS_API_URL` (ex.: `localhost`); o Next troca o `Host`, então o domínio público não chega à API |
 | `DJANGO_SECRET_KEY` | a API se recusa a subir com a chave padrão e `DEBUG=False` |
 | `POSTGRES_PASSWORD` | senha do banco |
 | `CORS_ORIGIN` / `FRONTEND_URL` | domínio do front |
