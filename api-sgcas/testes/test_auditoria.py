@@ -52,3 +52,60 @@ class TrilhaDeAuditoria(CenarioBase):
         self.assertFalse(
             RegistroDeAuditoria.objects.filter(acao='READ', entidade='citizens').exists()
         )
+
+
+class AuditoriaComCorpoGrande(CenarioBase):
+    """
+    A trilha só lê o corpo de requisições JSON.
+
+    Ler `request.body` de um upload carrega o arquivo inteiro na memória e
+    esbarra em DATA_UPLOAD_MAX_MEMORY_SIZE (2,5 MB): qualquer anexo maior que
+    isso era recusado com 400 pela própria auditoria, antes de chegar à view.
+    Uma foto de celular ou um PDF digitalizado passam disso com folga.
+
+    (O limite continua valendo para o JSON da API, onde o DRF lê o corpo
+    inteiro: é a proteção de memória do Django, e relato de 3 MB não é uso.)
+    """
+
+    def setUp(self):
+        import shutil
+        import tempfile
+
+        self.pasta = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.pasta, ignore_errors=True)
+
+    def _enviar_pdf(self, megabytes):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import override_settings
+
+        conteudo = b'%PDF-1.4\n' + b'0' * (megabytes * 1024 * 1024) + b'\n%%EOF\n'
+        with override_settings(ARMAZENAMENTO_LOCAL=self.pasta):
+            return self.como(self.tecnico).post(
+                f'/api/citizens/{self.cidadao.id}/anexos',
+                {'file': SimpleUploadedFile('d.pdf', conteudo, content_type='application/pdf'),
+                 'tipo_documento': 'laudo'},
+            )
+
+    def test_anexo_acima_de_2_5_mb_e_aceito(self):
+        resposta = self._enviar_pdf(4)
+        self.assertEqual(resposta.status_code, 201, resposta.content[:300])
+
+    def test_anexo_grande_e_auditado_sem_gravar_o_conteudo(self):
+        self._enviar_pdf(4)
+        registro = RegistroDeAuditoria.objects.filter(acao='CREATE', entidade='citizens').first()
+        self.assertIsNotNone(registro)
+        self.assertEqual(registro.operador_id, self.tecnico.id)
+        self.assertIsNone(registro.dados_depois)
+
+    def test_anexo_pequeno_continua_funcionando(self):
+        self.assertEqual(self._enviar_pdf(0).status_code, 201)
+
+    def test_json_pequeno_continua_auditado_com_redacao(self):
+        self.como(self.recepcionista).post(
+            '/api/citizens/novo',
+            {'nome': 'Pessoa Auditada', 'email': 'auditada@teste.local', 'cpf': '529.982.247-25',
+             'criar_acesso_tefe_cidadao': False},
+            content_type='application/json',
+        )
+        registro = RegistroDeAuditoria.objects.filter(acao='CREATE', entidade='citizens').first()
+        self.assertEqual(registro.dados_depois['cpf'], '***.***.***-25')

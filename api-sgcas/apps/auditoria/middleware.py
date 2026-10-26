@@ -62,8 +62,18 @@ class TrilhaDeAuditoria:
         return resposta
 
     def _corpo(self, request) -> dict | None:
-        """Lê o corpo antes da view consumi-lo."""
+        """
+        Lê o corpo JSON antes da view consumi-lo.
+
+        Só JSON entra na trilha. Ler `request.body` de um upload (multipart)
+        carrega o arquivo inteiro na memória e esbarra em
+        DATA_UPLOAD_MAX_MEMORY_SIZE (2,5 MB): era a própria auditoria que
+        recusava com 400 qualquer anexo maior que isso, antes de a view vê-lo.
+        O conteúdo de um arquivo não tem lugar na trilha de qualquer forma.
+        """
         if request.method not in ('POST', 'PUT', 'PATCH'):
+            return None
+        if request.content_type != 'application/json':
             return None
         try:
             return json.loads(request.body or b'{}')

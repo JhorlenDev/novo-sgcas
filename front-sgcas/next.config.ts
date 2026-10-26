@@ -7,6 +7,14 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  experimental: {
+    // O Next copia em memória o corpo das requisições que encaminha à API e,
+    // acima do limite (padrão 10 MB), passa adiante só o começo, sem erro — o
+    // que derruba a conexão com a API. Os anexos do prontuário aceitam até
+    // 25 MB (api-sgcas/apps/cidadaos/anexos.py); 26 MB acompanha o
+    // client_max_body_size do nginx (deploy/nginx/sgcas.conf).
+    proxyClientMaxBodySize: "26mb",
+  },
   async headers() {
     return [
       {
