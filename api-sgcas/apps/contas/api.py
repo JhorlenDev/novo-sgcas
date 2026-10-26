@@ -5,6 +5,7 @@ import uuid
 
 from django.db import models, transaction
 from django.utils import timezone
+from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import ValidationError
@@ -26,10 +27,16 @@ from apps.contas.serializers import (
 from apps.institucional.models import Unidade
 
 
+@ensure_csrf_cookie
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def eu(request):
-    """Quem está na sessão. É o que o front consulta ao carregar."""
+    """
+    Quem está na sessão. É o que o front consulta ao carregar.
+
+    Também entrega o cookie `csrftoken`: o front o devolve em `X-CSRFToken` nas
+    rotas de sessão (sair), que o Django protege. Nada mais o emitiria.
+    """
     return Response(OperadorSerializer(request.user).data)
 
 

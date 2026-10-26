@@ -6,6 +6,7 @@ modelos sao escritos sobre as tabelas existentes com `db_table`. Por isso o
 Django nao gerencia o esquema — `managed = False` nos modelos de dominio.
 """
 from pathlib import Path
+from urllib.parse import urlparse
 
 import environ
 
@@ -203,3 +204,10 @@ KEYCLOAK_REDIRECT_URI = env(
     default='http://localhost:3000/api/auth/keycloak/callback',
 )
 FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')
+
+# Atrás do proxy do Next, o navegador manda `Origin` com o domínio do front, mas
+# o `Host` que chega aqui é o da API (o proxy troca pelo do destino). Sem listar
+# o front, a checagem de origem recusa todo POST protegido por CSRF — hoje, sair
+# e reenviar solicitação.
+_front = urlparse(FRONTEND_URL)
+CSRF_TRUSTED_ORIGINS = [f'{_front.scheme}://{_front.netloc}']

@@ -6,6 +6,7 @@ import logging
 
 from django.conf import settings
 from django.http import HttpResponseRedirect, JsonResponse
+from django.middleware.csrf import get_token
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.contas import keycloak
@@ -42,6 +43,11 @@ def callback(request):
     É um fluxo aberto no navegador: erro aqui não pode virar JSON cru na tela,
     então cada desfecho leva a pessoa a uma página que explica o que houve.
     """
+    # Emite o cookie `csrftoken` que o front devolve em `X-CSRFToken`. Tem de
+    # ser aqui: quem cai em /waiting-approval não chama /auth/me, e sem o token
+    # o botão de reenviar a solicitação seria recusado.
+    get_token(request)
+
     esperado = request.session.pop(CHAVE_STATE, None)
     if not esperado or esperado != request.GET.get('state'):
         logger.warning(
