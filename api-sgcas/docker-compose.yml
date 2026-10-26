@@ -31,11 +31,17 @@ services:
     volumes:
       - ./armazenamento:/app/armazenamento
     healthcheck:
-      test: ['CMD-SHELL', 'curl -sf http://localhost:8000/api/institutional/units/ || exit 1']
+      # Só HTTP 200 vale: `curl -f` aceita redirecionamento como sucesso. Consulta
+      # /api/health, que confere o banco e não depende de login, de ALLOWED_HOSTS
+      # nem do redirecionamento HTTPS (ver apps/comum/saude.py). Endereço IPv4
+      # explícito porque o gunicorn escuta em 0.0.0.0, não em ::1.
+      test:
+        - CMD-SHELL
+        - 'test "$$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/api/health)" = 200'
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 15s
+      start_period: 20s
 
 volumes:
   pgdata:

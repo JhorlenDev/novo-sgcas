@@ -63,6 +63,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # Antes de tudo, inclusive da validação de host e do redirecionamento HTTPS:
+    # o healthcheck do container fala em HTTP puro com o Host do curl.
+    'apps.comum.saude.Saude',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
