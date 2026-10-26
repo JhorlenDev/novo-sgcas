@@ -48,6 +48,7 @@ from django.utils.html import escape
 from django.utils import timezone
 
 from apps.cidadaos import anexos as arquivos
+from apps.cidadaos import eliminacao
 from apps.cidadaos import pre_cadastro
 from apps.contas.permissoes import EquipeDeAtendimento, PodeConsultar, Recepcao, Supervisao
 from apps.institucional.models import Unidade
@@ -724,39 +725,25 @@ def exportar_dados(request, cidadao_id: str):
 @transaction.atomic
 def eliminar_dados_pessoais(request, cidadao_id: str):
     """
-    Elimina dados pessoais com anonimização (Art. 18, VI).
+    Elimina os dados pessoais (Art. 18, VI).
 
-    Soft delete: marca excluido_em e anonimiza dados sensíveis (CPF, email,
-    telefone, endereço). O registro permanece para integridade referencial,
-    mas torna-se inacessível nas consultas normais (filtrado por excluido_em).
+    Apaga o cadastro inteiro, os documentos escaneados (banco e disco) e o nome
+    copiado nos benefícios. O registro fica, anônimo, para a integridade das
+    referências; os textos livres dos atendimentos ficam sem vínculo com a
+    pessoa. Detalhes e a decisão por trás em `apps.cidadaos.eliminacao`.
     """
     cidadao = Cidadao.vigentes.filter(id=cidadao_id).first()
     if cidadao is None:
         return Response({'detalhe': 'Cidadão não encontrado'}, status=status.HTTP_404_NOT_FOUND)
 
-    agora = timezone.now()
-
-    # Anonimiza dados sensíveis antes de marcar como excluído
-    cidadao.cpf = None
-    cidadao.cpf_indice = None
-    cidadao.nis = None
-    cidadao.nis_indice = None
-    cidadao.email = None
-    cidadao.email_indice = None
-    cidadao.rg = None
-    cidadao.telefone = None
-    cidadao.endereco = None
-    cidadao.nome = f'Cidadão excluído {cidadao.id[:8]}'
-    cidadao.excluido_em = agora
-    cidadao.atualizado_em = agora
-    cidadao.save()
+    resumo = eliminacao.eliminar(cidadao, timezone.now())
 
     _registrar_auditoria(
         request, 'ERASURE', 'cidadao', cidadao.id,
-        dados_novos={'acao': 'eliminacao_lgpd'},
+        dados_novos={'acao': 'eliminacao_lgpd', **resumo},
     )
 
-    return Response({'mensagem': 'Dados pessoais eliminados com sucesso'}, status=status.HTTP_200_OK)
+    return Response({'mensagem': 'Dados pessoais eliminados com sucesso', **resumo}, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])

@@ -332,6 +332,24 @@ python manage.py cifrar_dados_pessoais
 
 Em uma base existente, essa atualização também prepara os índices de busca por documentos. Preserve cópias seguras das chaves fora do servidor: sua perda impede a recuperação dos dados cifrados.
 
+### Eliminação de dados pessoais (LGPD)
+
+`DELETE /api/citizens/:id/dados-pessoais` (ADMIN e COORDENADOR) elimina os dados pessoais do cidadão:
+
+- **Apaga:** o cadastro inteiro (documentos, contatos, endereço, nascimento, raça, deficiência, composição da família, dados socioeconômicos, índices de busca), os documentos escaneados (no banco e a pasta inteira do disco) e o nome copiado nos benefícios. O registro permanece, anônimo (`Cidadão excluído xxxxxxxx`), e o mesmo CPF pode ser cadastrado de novo.
+- **Mantém:** os textos livres dos atendimentos (relato do caso, motivo da recepção, observações de encaminhamento, descrição do benefício), sem vínculo com a pessoa, por decisão da direção: o histórico é prestação de contas. Se o técnico escreveu o nome da pessoa dentro do texto, o nome continua no texto. Também ficam o histórico de consentimento e a trilha de auditoria (que registra a eliminação sem dado pessoal).
+- **Não alcança backups.** Restaurar um backup anterior à eliminação traz os dados de volta; reaplique as eliminações registradas na trilha (ação `ERASURE`) depois de qualquer restauração.
+
+Os arquivos só saem do disco depois que o banco grava. Se não puderem ser apagados, a eliminação do cadastro continua valendo e o erro vai ao log com o caminho a apagar à mão.
+
+**Atualizando de uma versão anterior.** A versão anterior apagava só 10 campos e marcava o pedido como atendido. Para completar essas eliminações (o comando só toca em cadastros que o próprio sistema eliminou, nunca em registros excluídos por outro motivo):
+
+```bash
+cd api-sgcas
+python manage.py completar_eliminacao_lgpd --simular   # relata o que seria apagado, sem apagar
+python manage.py completar_eliminacao_lgpd             # apaga, e não há volta
+```
+
 ## Solução de problemas
 
 | Sintoma | O que conferir |

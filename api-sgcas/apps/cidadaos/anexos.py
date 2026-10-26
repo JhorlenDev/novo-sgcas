@@ -23,6 +23,8 @@ Três cuidados que a implementação anterior tomava e foram mantidos:
 from __future__ import annotations
 
 import io
+import logging
+import shutil
 import uuid
 from pathlib import Path
 
@@ -81,6 +83,9 @@ CABECALHO_DO_PDF = b'%PDF-'
 JANELA_DO_CABECALHO = 1024
 FIM_DO_PDF = b'%%EOF'
 JANELA_DO_FIM = 4096
+
+
+logger = logging.getLogger(__name__)
 
 
 class ErroDeAnexo(ValueError):
@@ -213,6 +218,36 @@ def caminho(cidadao_id: str, anexo: dict, miniatura: bool = False) -> Path:
     if not destino.exists():
         raise ErroDeAnexo('Arquivo não encontrado no armazenamento')
     return destino
+
+
+def pasta_do_cidadao(cidadao_id: str) -> Path | None:
+    """A pasta de anexos do cidadão, sem criá-la. `None` se o id não for UUID."""
+    try:
+        return _raiz() / 'cidadaos' / str(uuid.UUID(cidadao_id))
+    except ValueError:
+        return None
+
+
+def remover_pasta_do_cidadao(cidadao_id: str) -> None:
+    """
+    Apaga a pasta inteira do cidadão, inclusive arquivo que ficou sem metadado
+    (upload interrompido): na eliminação de dados pessoais, o que está no disco
+    também é dado pessoal.
+
+    Chamada depois de a transação gravar. Se falhar, o cadastro já foi eliminado
+    e não se desfaz; o erro vai ao log com o que apagar à mão — melhor do que
+    derrubar uma eliminação que o titular tem direito de ver concluída.
+    """
+    pasta = pasta_do_cidadao(cidadao_id)
+    if pasta is None:
+        logger.error('Pasta de anexos não removida: o id %s não é um UUID.', cidadao_id)
+        return
+    if not pasta.exists():
+        return
+    try:
+        shutil.rmtree(pasta)
+    except OSError:
+        logger.exception('Não foi possível apagar a pasta de anexos %s; apague-a manualmente.', pasta)
 
 
 def remover(cidadao_id: str, anexo: dict) -> None:
