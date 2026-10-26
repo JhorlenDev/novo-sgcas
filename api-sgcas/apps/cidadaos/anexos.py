@@ -12,7 +12,8 @@ Três cuidados que a implementação anterior tomava e foram mantidos:
 2. **O nome no disco é gerado**, não é o original. Nome de arquivo carrega dado
    pessoal com frequência ("RG da Maria.jpg").
 3. **Imagem é recomprimida.** Além de economizar espaço, remove metadados EXIF —
-   que costumam trazer a coordenada de onde a foto foi tirada.
+   que costumam trazer a coordenada de onde a foto foi tirada. A orientação
+   anotada pelo celular é aplicada antes de descartá-los.
 4. **O conteúdo é conferido, não só o tipo informado.** O `Content-Type` do
    upload é escrito por quem envia; aceitá-lo sozinho deixava gravar qualquer
    coisa como "PDF" e depois servi-la com esse tipo. O PDF é reconhecido pelo
@@ -26,7 +27,7 @@ import uuid
 from pathlib import Path
 
 from django.conf import settings
-from PIL import Image
+from PIL import Image, ImageOps
 
 TIPOS_ACEITOS = {
     'image/jpeg': '.jpg',
@@ -86,7 +87,11 @@ def _processar_imagem(conteudo: bytes) -> tuple[bytes, bytes]:
     with Image.open(io.BytesIO(conteudo), formats=FORMATOS_DE_IMAGEM) as imagem:
         if imagem.width * imagem.height > PIXELS_MAXIMOS:
             raise ErroDeAnexo('Imagem grande demais. Reduza a resolução e envie novamente.')
-        imagem = imagem.convert('RGB')
+        # O celular grava a imagem na posição do sensor e anota em EXIF como
+        # girá-la. Como os metadados são descartados abaixo, a orientação tem de
+        # ser aplicada aqui: sem isso a anotação some e a foto fica de lado para
+        # sempre (um RG que só se lê girando a tela).
+        imagem = ImageOps.exif_transpose(imagem).convert('RGB')
         imagem.thumbnail((LADO_MAXIMO, LADO_MAXIMO))
 
         principal = io.BytesIO()
