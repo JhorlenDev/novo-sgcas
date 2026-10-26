@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from apps.cidadaos.anexos import TipoDeDocumento
 from apps.cidadaos.models import Cidadao
 
 
@@ -80,3 +81,15 @@ class NovoCidadaoSerializer(serializers.ModelSerializer):
                                  'ou desmarque a criação do acesso.'
             })
         return dados
+
+
+class NovoAnexoSerializer(serializers.Serializer):
+    """
+    Os campos de texto de um envio de anexo (o arquivo é conferido à parte).
+
+    Sem tipo informado, vale `outro`.
+    """
+
+    tipo_documento = serializers.ChoiceField(
+        choices=TipoDeDocumento.choices, required=False, default=TipoDeDocumento.OUTRO,
+    )

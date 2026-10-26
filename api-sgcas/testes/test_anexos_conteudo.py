@@ -39,7 +39,7 @@ class ConteudoDoAnexo(CenarioBase):
         with override_settings(ARMAZENAMENTO_LOCAL=self.pasta):
             return self.como(self.tecnico).post(
                 f'/api/citizens/{self.cidadao.id}/anexos',
-                {'file': arquivo, 'tipo_documento': 'comprovante'},
+                {'file': arquivo, 'tipo_documento': 'comprovante_residencia'},
             )
 
     def anexos_do_cidadao(self):

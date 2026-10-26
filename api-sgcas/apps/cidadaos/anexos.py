@@ -27,7 +27,31 @@ import uuid
 from pathlib import Path
 
 from django.conf import settings
+from django.db import models
 from PIL import Image, ImageOps
+
+class TipoDeDocumento(models.TextChoices):
+    """
+    O que um anexo do prontuário pode ser. Vocabulário fechado, não texto livre:
+    o que ia para o JSON do cidadão era qualquer coisa, de qualquer tamanho, e
+    depois aparecia na tela. Fechado, dá para filtrar e contar por tipo.
+
+    Acrescentar um tipo é acrescentar uma linha aqui (e o rótulo na tela).
+    Anexos antigos com outro valor continuam sendo lidos; só o envio valida.
+    """
+
+    RG_FRENTE = 'rg_frente', 'RG (frente)'
+    RG_VERSO = 'rg_verso', 'RG (verso)'
+    CPF = 'cpf', 'CPF'
+    CERTIDAO_DE_NASCIMENTO = 'certidao_nascimento', 'Certidão de nascimento'
+    CERTIDAO_DE_CASAMENTO = 'certidao_casamento', 'Certidão de casamento'
+    COMPROVANTE_DE_RESIDENCIA = 'comprovante_residencia', 'Comprovante de residência'
+    COMPROVANTE_DE_RENDA = 'comprovante_renda', 'Comprovante de renda'
+    CADUNICO = 'cadunico', 'Cadastro Único / NIS'
+    LAUDO = 'laudo', 'Laudo ou relatório técnico'
+    DECLARACAO = 'declaracao', 'Declaração'
+    OUTRO = 'outro', 'Outro'
+
 
 TIPOS_ACEITOS = {
     'image/jpeg': '.jpg',

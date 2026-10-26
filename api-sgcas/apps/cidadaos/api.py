@@ -38,6 +38,7 @@ from apps.cidadaos.serializers import (
     CidadaoNaListaSerializer,
     CidadaoSerializer,
     EntradaDoHistoricoSerializer,
+    NovoAnexoSerializer,
     NovoCidadaoSerializer,
 )
 import uuid
@@ -571,11 +572,14 @@ def anexos(request, cidadao_id: str):
             for a in lista
         ])
 
+    campos = NovoAnexoSerializer(data=request.data)
+    campos.is_valid(raise_exception=True)
+    tipo_documento = campos.validated_data['tipo_documento']
+
     arquivo = request.FILES.get('file')
     if arquivo is None:
         return Response({'file': 'Envie um arquivo'}, status=status.HTTP_400_BAD_REQUEST)
 
-    tipo_documento = request.data.get('tipo_documento') or 'outro'
     try:
         anexo = arquivos.guardar(cidadao_id, arquivo, tipo_documento)
     except arquivos.ErroDeAnexo as erro:
