@@ -41,6 +41,11 @@ class Caso(models.Model):
         ALTA = 'ALTA', 'Alta'
         URGENTE = 'URGENTE', 'Urgente'
 
+    # O que o sistema entende por caso encerrado: a fila, o painel e o chamar
+    # próximo já os excluem. ENCAMINHADO não entra: o caso segue aberto para
+    # quem o recebeu, e é essa equipe que o conclui.
+    ENCERRADAS = (Situacao.CONCLUIDO, Situacao.CANCELADO)
+
     id = models.TextField(primary_key=True)
     protocolo = models.TextField(db_column='protocol')
     situacao = models.TextField(db_column='status', default=Situacao.EM_TRIAGEM)

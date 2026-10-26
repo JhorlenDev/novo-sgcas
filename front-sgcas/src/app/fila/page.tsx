@@ -22,7 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, SecondaryButton, Select } from "@/components/ui";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import type { Cidadao, EntradaHistorico, Caso, PainelAtendente, Senha, Unidade } from "@/types/sgcas";
 
@@ -325,8 +325,14 @@ export default function FilaPage() {
       setModalOpen(false);
       setMensagem("Atendimento concluído e senha finalizada.");
       await carregar();
-    } catch {
-      setMensagem("Não foi possível concluir o atendimento.");
+    } catch (error) {
+      // 409: o caso já foi encerrado (por outra aba ou outro técnico). A API diz
+      // em que situação ele está; o texto genérico esconderia o motivo.
+      setMensagem(
+        error instanceof ApiError && error.status === 409
+          ? error.message
+          : "Não foi possível concluir o atendimento.",
+      );
     } finally {
       setSalvando(false);
     }

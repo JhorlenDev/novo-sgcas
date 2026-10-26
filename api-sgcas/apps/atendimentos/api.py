@@ -80,6 +80,17 @@ def _proxima_senha(unidade_id: str, prioridade: str) -> str:
     return f'{prefixo}{max(numeros, default=0) + 1:03d}'
 
 
+def _caso_encerrado(caso):
+    """Resposta 409 se o caso já foi encerrado; `None` se ainda pode mudar de estado."""
+    if caso.situacao not in Caso.ENCERRADAS:
+        return None
+    rotulo = dict(Caso.Situacao.choices).get(caso.situacao, caso.situacao)
+    return Response(
+        {'detalhe': f'Este caso já foi encerrado ({rotulo}).'},
+        status=status.HTTP_409_CONFLICT,
+    )
+
+
 def _acrescentar_ao_relato(caso, operador, momento, texto: str) -> None:
     """
     Acrescenta uma anotação datada e assinada ao relato do caso.
@@ -263,7 +274,7 @@ def _grupos_do_painel(operador):
         'aguardando_na_fila': fila.filter(situacao=SenhaDaFila.Situacao.AGUARDANDO),
         'em_atendimento': fila.filter(situacao=SenhaDaFila.Situacao.EM_ATENDIMENTO),
         'finalizados_hoje': casos.filter(tecnico=operador, fechado_em__date=hoje, situacao__in=[Caso.Situacao.CONCLUIDO, Caso.Situacao.ENCAMINHADO]),
-        'casos_em_acompanhamento': casos.exclude(situacao__in=[Caso.Situacao.CONCLUIDO, Caso.Situacao.CANCELADO]),
+        'casos_em_acompanhamento': casos.exclude(situacao__in=Caso.ENCERRADAS),
     }
 
 
@@ -308,7 +319,7 @@ def _montar_atendimento(senha, operador):
     cidadao = senha.cidadao
     caso = (
         Caso.vigentes.filter(cidadao=cidadao, unidade_id=senha.unidade_id)
-        .exclude(situacao__in=[Caso.Situacao.CONCLUIDO, Caso.Situacao.CANCELADO])
+        .exclude(situacao__in=Caso.ENCERRADAS)
         .order_by('-aberto_em')
         .first()
     )
@@ -412,7 +423,7 @@ def chamar_proximo(request):
     cidadao = proxima.cidadao
     caso = (
         Caso.vigentes.filter(cidadao=cidadao, unidade_id=operador.unidade_id)
-        .exclude(situacao__in=[Caso.Situacao.CONCLUIDO, Caso.Situacao.CANCELADO])
+        .exclude(situacao__in=Caso.ENCERRADAS)
         .order_by('-aberto_em')
         .first()
     )
@@ -518,11 +529,15 @@ def encaminhar(request, caso_id: str):
     dados.is_valid(raise_exception=True)
     d = dados.validated_data
 
-    caso = Caso.vigentes.filter(id=caso_id).first()
+    # Trava a linha: o estado é lido e depois alterado, e duas requisições
+    # simultâneas leriam o mesmo estado.
+    caso = Caso.vigentes.select_for_update().filter(id=caso_id).first()
     if caso is None:
         return Response({'detalhe': 'Caso não encontrado'}, status=status.HTTP_404_NOT_FOUND)
     if not pode_acessar_unidade(request.user, caso.unidade_id):
         return Response({'detalhe': 'Caso de outra unidade'}, status=status.HTTP_403_FORBIDDEN)
+    if (encerrado := _caso_encerrado(caso)) is not None:
+        return encerrado
 
     destino_id = (d.get('unidade_destino_id') or '').strip() or None
     if destino_id and not Unidade.ativas.filter(id=destino_id).exists():
@@ -595,11 +610,17 @@ def concluir(request, caso_id: str):
     dados = ConclusaoSerializer(data=request.data)
     dados.is_valid(raise_exception=True)
 
-    caso = Caso.vigentes.filter(id=caso_id).first()
+    # Trava a linha: sem isso duas conclusões simultâneas passam pela checagem
+    # de estado juntas e as duas concluem.
+    caso = Caso.vigentes.select_for_update().filter(id=caso_id).first()
     if caso is None:
         return Response({'detalhe': 'Caso não encontrado'}, status=status.HTTP_404_NOT_FOUND)
     if not pode_acessar_unidade(request.user, caso.unidade_id):
         return Response({'detalhe': 'Caso de outra unidade'}, status=status.HTTP_403_FORBIDDEN)
+    # Reconcluir reescreveria o fechamento, duplicaria a conclusão no relato e
+    # liberaria a senha EM_ATENDIMENTO que a mesma pessoa tenha hoje na unidade.
+    if (encerrado := _caso_encerrado(caso)) is not None:
+        return encerrado
 
     agora = timezone.now()
     caso.situacao = dados.validated_data['situacao']
