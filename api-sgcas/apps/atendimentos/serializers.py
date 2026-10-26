@@ -157,6 +157,9 @@ class RegistroDeRecepcaoSerializer(serializers.Serializer):
     motivo = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     servico = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     acao_itinerante_id = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    # A visita cumpre este encaminhamento: é o mesmo caso, com a ficha, na fila do
+    # destino — em vez de abrir um segundo caso para a mesma pessoa.
+    encaminhamento_id = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     def validate_prioridade(self, valor):
         # Rebaixa em vez de recusar: a recepção pediu urgência de boa-fé, e

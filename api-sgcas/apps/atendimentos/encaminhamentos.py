@@ -334,3 +334,23 @@ def ao_cancelar_caso(caso: Caso, operador, agora) -> None:
     _fechar_os_recebidos(
         caso, operador, agora, 'A pessoa não compareceu ao atendimento.', Aviso.Tipo.NAO_COMPARECEU,
     )
+
+
+def registrar_chegada(enc: Encaminhamento, operador, agora) -> None:
+    """
+    A pessoa chegou à unidade de destino: a recepção registrou a visita que cumpre
+    o encaminhamento. Quem aceitou antes segue sendo quem aceitou; se ninguém
+    tinha respondido, chegar é aceitar. A origem é avisada.
+    """
+    if enc.situacao == Encaminhamento.Situacao.PENDENTE:
+        enc.situacao = Encaminhamento.Situacao.ACEITO
+        enc.respondido_por = operador
+        enc.respondido_em = agora
+        enc.resposta = 'A pessoa chegou à unidade.'
+    enc.chegou_em = agora
+    enc.atualizado_em = agora
+    enc.save()
+    avisar(
+        enc.unidade_origem_id, Aviso.Tipo.PESSOA_CHEGOU, encaminhamento=enc,
+        cidadao_id=enc.caso.cidadao_id, dados=_dados_do_ciclo(enc), agora=agora,
+    )

@@ -23,6 +23,7 @@ from apps.atendimentos.serializers import (
     AtendimentoDeRecepcaoSerializer,
     CasoSerializer,
     ConclusaoSerializer,
+    EncaminhamentoResumoSerializer,
     EncaminhamentoSerializer,
     NaoCompareceuSerializer,
     NovaAcaoItineranteSerializer,
@@ -103,6 +104,59 @@ def _ordem_de_prioridade():
     )
 
 
+def _caso_da_senha(senha):
+    """
+    O caso que esta senha atende.
+
+    A senha sabe o seu caso. Sem isso (senhas anteriores a este vínculo) vale o
+    caso aberto mais recente da pessoa na unidade — que, com um caso encaminhado
+    de outra unidade, errava: o mais antigo perdia para qualquer caso novo.
+    """
+    if senha.caso_id:
+        caso = Caso.vigentes.filter(pk=senha.caso_id).exclude(situacao__in=Caso.ENCERRADAS).first()
+        if caso is not None and caso.unidade_id == senha.unidade_id:
+            return caso
+    return (
+        Caso.vigentes.filter(cidadao_id=senha.cidadao_id, unidade_id=senha.unidade_id)
+        .exclude(situacao__in=Caso.ENCERRADAS)
+        .order_by('-aberto_em')
+        .first()
+    )
+
+
+def _encaminhamento_a_cumprir(d, cidadao, destino_id):
+    """
+    O encaminhamento que esta visita cumpre, validado e travado — ou a resposta de
+    erro. Devolve (encaminhamento, caso, None) ou (None, None, resposta).
+    """
+    def recusa(campo, mensagem, codigo=status.HTTP_400_BAD_REQUEST):
+        return None, None, Response({campo: mensagem}, status=codigo)
+
+    if d['desfecho'] != AtendimentoDeRecepcao.Desfecho.ENCAMINHADO:
+        return recusa('encaminhamento_id', 'Para cumprir um encaminhamento, encaminhe a pessoa à fila.')
+
+    enc = Encaminhamento.objects.select_for_update().filter(id=d['encaminhamento_id']).first()
+    if enc is None:
+        return recusa('encaminhamento_id', 'Encaminhamento não encontrado.')
+
+    caso = Caso.objects.select_for_update().get(pk=enc.caso_id)
+    if caso.cidadao_id != cidadao.id:
+        return recusa('encaminhamento_id', 'Este encaminhamento é de outra pessoa.')
+    if enc.unidade_destino_id != destino_id:
+        return recusa('encaminhamento_id', 'Este encaminhamento é para outra unidade.')
+    if enc.situacao not in encaminhamentos.ABERTOS:
+        rotulo = dict(Encaminhamento.Situacao.choices).get(enc.situacao, enc.situacao).lower()
+        return recusa('encaminhamento_id', f'Este encaminhamento já está {rotulo}.', status.HTTP_409_CONFLICT)
+    if enc.chegou_em is not None:
+        return recusa('encaminhamento_id', 'A chegada desta pessoa já foi registrada.', status.HTTP_409_CONFLICT)
+    if caso.unidade_id != destino_id or caso.situacao in Caso.ENCERRADAS:
+        return recusa(
+            'encaminhamento_id', 'O caso deste encaminhamento não está mais com esta unidade ou já foi encerrado.',
+            status.HTTP_409_CONFLICT,
+        )
+    return enc, caso, None
+
+
 @api_view(['POST'])
 @permission_classes([Recepcao])
 @transaction.atomic
@@ -152,26 +206,56 @@ def registrar_recepcao(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    # Valida antes de alterar qualquer coisa: a resposta de erro não pode deixar
+    # nada pela metade.
+    encaminhamento = None
+    caso_encaminhado = None
+    if d.get('encaminhamento_id'):
+        encaminhamento, caso_encaminhado, erro = _encaminhamento_a_cumprir(d, cidadao, destino_id)
+        if erro is not None:
+            return erro
+
     agora = timezone.now()
     caso = None
     senha = None
 
     if d['desfecho'] == AtendimentoDeRecepcao.Desfecho.ENCAMINHADO:
         prioridade = d.get('prioridade') or Caso.Prioridade.NORMAL
-        caso = Caso(
-            id=str(uuid.uuid4()), protocolo=_protocolo(),
-            situacao=Caso.Situacao.EM_TRIAGEM, prioridade=prioridade,
-            descricao=d.get('observacao') or servico.nome, cidadao=cidadao,
-            unidade_id=destino_id, servico=servico,
-            demanda_id=servico.demanda_id,
-            acao_itinerante_id=d.get('acao_itinerante_id') or None,
-            aberto_em=agora, criado_em=agora, atualizado_em=agora,
-        )
-        caso.save(force_insert=True)
+
+        if encaminhamento is not None:
+            # A pessoa chegou: é o mesmo caso, com a ficha, agora na fila deste
+            # destino. A urgência é a que o técnico da origem definiu (a recepção
+            # não a rebaixa: é avaliação técnica).
+            caso = caso_encaminhado
+            prioridade = encaminhamentos.mais_urgente(prioridade, encaminhamento.urgencia)
+            origem = encaminhamento.unidade_origem.nome if encaminhamento.unidade_origem_id else 'outra unidade'
+            nota = f'Chegou a {servico.unidade.nome}, encaminhado de {origem}.'
+            if d.get('observacao'):
+                nota += f' {d["observacao"]}'
+            _acrescentar_ao_relato(caso, operador, agora, nota)
+            caso.situacao = Caso.Situacao.EM_TRIAGEM
+            caso.prioridade = prioridade
+            caso.servico = servico
+            caso.demanda_id = servico.demanda_id
+            caso.atualizado_em = agora
+            caso.save(update_fields=[
+                'situacao', 'prioridade', 'servico', 'demanda_id', 'descricao', 'atualizado_em',
+            ])
+        else:
+            caso = Caso(
+                id=str(uuid.uuid4()), protocolo=_protocolo(),
+                situacao=Caso.Situacao.EM_TRIAGEM, prioridade=prioridade,
+                descricao=d.get('observacao') or servico.nome, cidadao=cidadao,
+                unidade_id=destino_id, servico=servico,
+                demanda_id=servico.demanda_id,
+                acao_itinerante_id=d.get('acao_itinerante_id') or None,
+                aberto_em=agora, criado_em=agora, atualizado_em=agora,
+            )
+            caso.save(force_insert=True)
 
         senha = SenhaDaFila(
             id=str(uuid.uuid4()), senha=_proxima_senha(destino_id, prioridade),
-            cidadao=cidadao, unidade_id=destino_id,
+            cidadao=cidadao, unidade_id=destino_id, caso=caso,
             prioridade=prioridade, situacao=SenhaDaFila.Situacao.AGUARDANDO,
             servico=servico.nome,
             criado_em=agora, atualizado_em=agora,
@@ -181,14 +265,18 @@ def registrar_recepcao(request):
     AtendimentoDeRecepcao(
         id=str(uuid.uuid4()), cidadao=cidadao, unidade_id=operador.unidade_id,
         atendido_por=operador, demanda=servico.nome, desfecho=d['desfecho'],
-        motivo=d.get('motivo') or None, caso=caso,
+        motivo=d.get('motivo') or None, caso=caso, encaminhamento=encaminhamento,
         acao_itinerante_id=d.get('acao_itinerante_id') or None,
     ).save(force_insert=True)
+
+    if encaminhamento is not None:
+        encaminhamentos.registrar_chegada(encaminhamento, operador, agora)
 
     return Response({
         'desfecho': d['desfecho'],
         'caso': CasoSerializer(caso).data if caso else None,
         'senha': SenhaSerializer(senha).data if senha else None,
+        'encaminhamento': EncaminhamentoResumoSerializer(encaminhamento).data if encaminhamento else None,
     }, status=status.HTTP_201_CREATED)
 
 
@@ -304,12 +392,7 @@ def _senha_atual(operador):
 
 def _montar_atendimento(senha, operador):
     cidadao = senha.cidadao
-    caso = (
-        Caso.vigentes.filter(cidadao=cidadao, unidade_id=senha.unidade_id)
-        .exclude(situacao__in=Caso.ENCERRADAS)
-        .order_by('-aberto_em')
-        .first()
-    )
+    caso = _caso_da_senha(senha)
     return {
         'senha': SenhaSerializer(senha).data,
         'cidadao': CidadaoSerializer(cidadao).data,
@@ -407,13 +490,7 @@ def chamar_proximo(request):
     proxima.atualizado_em = agora
     proxima.save(update_fields=['situacao', 'atendido_por', 'chamado_em', 'atualizado_em'])
 
-    cidadao = proxima.cidadao
-    caso = (
-        Caso.vigentes.filter(cidadao=cidadao, unidade_id=operador.unidade_id)
-        .exclude(situacao__in=Caso.ENCERRADAS)
-        .order_by('-aberto_em')
-        .first()
-    )
+    caso = _caso_da_senha(proxima)
     if caso:
         caso.situacao = Caso.Situacao.EM_ATENDIMENTO
         caso.tecnico = operador
