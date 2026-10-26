@@ -495,6 +495,7 @@ class Aviso(models.Model):
         ENCAMINHAMENTO_RECUSADO = 'ENCAMINHAMENTO_RECUSADO', 'Encaminhamento recusado'
         PESSOA_CHEGOU = 'PESSOA_CHEGOU', 'Pessoa chegou à unidade'
         ENCAMINHAMENTO_CONCLUIDO = 'ENCAMINHAMENTO_CONCLUIDO', 'Atendimento concluído'
+        NAO_COMPARECEU = 'NAO_COMPARECEU', 'Pessoa não compareceu'
         ENCAMINHADO_ADIANTE = 'ENCAMINHADO_ADIANTE', 'Encaminhado para outra unidade'
         BENEFICIO_REPETIDO = 'BENEFICIO_REPETIDO', 'Benefício concedido novamente'
 

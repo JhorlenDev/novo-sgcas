@@ -207,3 +207,130 @@ def criar(*, caso: Caso, operador, destino, destino_externo: str, dados: dict, a
             agora=agora,
         )
     return encaminhamento
+
+
+# ─── o ciclo de vida ───────────────────────────────────────────────────────
+
+ABERTOS = (Encaminhamento.Situacao.PENDENTE, Encaminhamento.Situacao.ACEITO)
+
+
+def _rotulo(situacao: str) -> str:
+    return dict(Encaminhamento.Situacao.choices).get(situacao, situacao)
+
+
+def _dados_do_ciclo(enc: Encaminhamento) -> dict:
+    return {
+        'origem': enc.unidade_origem.nome if enc.unidade_origem_id else None,
+        'destino': enc.unidade_destino.nome if enc.unidade_destino_id else enc.destino_externo,
+    }
+
+
+def aceitar(enc: Encaminhamento, operador, observacao: str | None, agora) -> None:
+    """O destino aceita. A origem fica sabendo."""
+    if enc.situacao != Encaminhamento.Situacao.PENDENTE:
+        raise EncaminhamentoInvalido(
+            {'detalhe': f'Este encaminhamento já foi respondido ({_rotulo(enc.situacao).lower()}).'}, 409,
+        )
+    enc.situacao = Encaminhamento.Situacao.ACEITO
+    enc.respondido_por = operador
+    enc.respondido_em = agora
+    enc.resposta = (observacao or '').strip() or None
+    enc.atualizado_em = agora
+    enc.save()
+    avisar(
+        enc.unidade_origem_id, Aviso.Tipo.ENCAMINHAMENTO_ACEITO, encaminhamento=enc,
+        cidadao_id=enc.caso.cidadao_id, dados=_dados_do_ciclo(enc), agora=agora,
+    )
+
+
+def recusar(enc: Encaminhamento, operador, motivo: str, agora) -> None:
+    """
+    O destino recusa, com o motivo. O caso volta para a origem, aberto, para quem
+    encaminhou poder agir — encaminhar de novo, atender ou concluir. O motivo fica
+    na ficha e no relato do caso; o aviso à origem não o carrega.
+    """
+    if enc.situacao != Encaminhamento.Situacao.PENDENTE:
+        raise EncaminhamentoInvalido(
+            {'detalhe': f'Este encaminhamento já foi respondido ({_rotulo(enc.situacao).lower()}).'}, 409,
+        )
+    caso = Caso.objects.select_for_update().get(pk=enc.caso_id)
+    if enc.unidade_origem_id is None:
+        raise EncaminhamentoInvalido(
+            {'detalhe': 'Este encaminhamento não tem unidade de origem registrada; não há para onde devolver o caso.'},
+            409,
+        )
+    if caso.unidade_id != enc.unidade_destino_id or caso.situacao in Caso.ENCERRADAS:
+        raise EncaminhamentoInvalido(
+            {'detalhe': 'O caso não está mais com esta unidade ou já foi encerrado.'}, 409,
+        )
+
+    enc.situacao = Encaminhamento.Situacao.RECUSADO
+    enc.respondido_por = operador
+    enc.respondido_em = agora
+    enc.resposta = motivo.strip()
+    enc.atualizado_em = agora
+    enc.save()
+
+    acrescentar_ao_relato(
+        caso, operador, agora,
+        f'Encaminhamento recusado por {caso.unidade.nome}. Motivo: {motivo.strip()}',
+    )
+    caso.unidade_id = enc.unidade_origem_id
+    caso.situacao = Caso.Situacao.EM_ATENDIMENTO
+    caso.atualizado_em = agora
+    caso.save(update_fields=['unidade', 'situacao', 'descricao', 'atualizado_em'])
+
+    avisar(
+        enc.unidade_origem_id, Aviso.Tipo.ENCAMINHAMENTO_RECUSADO, encaminhamento=enc,
+        cidadao_id=caso.cidadao_id, dados=_dados_do_ciclo(enc), agora=agora,
+    )
+
+
+def concluir_externo(enc: Encaminhamento, operador, resultado: str, agora) -> None:
+    """
+    Quem encaminhou registra o retorno do serviço externo (Conselho Tutelar,
+    saúde...): não há operador de lá no sistema para fazê-lo.
+    """
+    if enc.situacao not in ABERTOS:
+        raise EncaminhamentoInvalido(
+            {'detalhe': f'Este encaminhamento já está {_rotulo(enc.situacao).lower()}.'}, 409,
+        )
+    enc.situacao = Encaminhamento.Situacao.CONCLUIDO
+    enc.concluido_em = agora
+    enc.resultado = resultado.strip()
+    enc.atualizado_em = agora
+    enc.save()
+
+
+def _fechar_os_recebidos(caso: Caso, operador, agora, resultado: str, tipo_de_aviso: str) -> None:
+    """
+    O que a unidade recebeu por encaminhamento termina com o caso: concluído ou
+    com a pessoa sem aparecer. A unidade que enviou é avisada — é a pergunta "em
+    que pé anda o atendimento de fulano".
+    """
+    recebidos = Encaminhamento.objects.select_for_update().filter(
+        caso=caso, unidade_destino_id=caso.unidade_id, situacao__in=ABERTOS,
+    )
+    for enc in recebidos:
+        enc.situacao = Encaminhamento.Situacao.CONCLUIDO
+        enc.concluido_em = agora
+        enc.resultado = resultado
+        if enc.respondido_em is None:
+            enc.respondido_por = operador
+            enc.respondido_em = agora
+        enc.atualizado_em = agora
+        enc.save()
+        avisar(
+            enc.unidade_origem_id, tipo_de_aviso, encaminhamento=enc,
+            cidadao_id=caso.cidadao_id, dados=_dados_do_ciclo(enc), agora=agora,
+        )
+
+
+def ao_concluir_caso(caso: Caso, operador, relato: str, agora) -> None:
+    _fechar_os_recebidos(caso, operador, agora, relato, Aviso.Tipo.ENCAMINHAMENTO_CONCLUIDO)
+
+
+def ao_cancelar_caso(caso: Caso, operador, agora) -> None:
+    _fechar_os_recebidos(
+        caso, operador, agora, 'A pessoa não compareceu ao atendimento.', Aviso.Tipo.NAO_COMPARECEU,
+    )

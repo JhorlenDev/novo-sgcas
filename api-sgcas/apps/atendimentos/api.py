@@ -467,6 +467,7 @@ def nao_compareceu(request, senha_id: str):
         caso.fechado_em = agora
         caso.atualizado_em = agora
         caso.save(update_fields=['descricao', 'situacao', 'fechado_em', 'atualizado_em'])
+        encaminhamentos.ao_cancelar_caso(caso, request.user, agora)
 
     return Response({
         'senha': SenhaSerializer(senha).data,
@@ -619,6 +620,10 @@ def concluir(request, caso_id: str):
         cidadao_id=caso.cidadao_id, unidade_id=caso.unidade_id,
         situacao=SenhaDaFila.Situacao.EM_ATENDIMENTO,
     ).update(situacao=SenhaDaFila.Situacao.ATENDIDO, finalizado_em=agora, atualizado_em=agora)
+
+    # Se este caso chegou por encaminhamento, ele termina com o caso — e a unidade
+    # que o enviou é avisada.
+    encaminhamentos.ao_concluir_caso(caso, request.user, dados.validated_data['relato'], agora)
 
     return Response(CasoSerializer(caso).data)
 

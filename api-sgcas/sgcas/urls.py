@@ -3,7 +3,9 @@ from django.urls import include, path
 
 from apps.atendimentos.urls import (
     acoes_urlpatterns,
+    avisos_urlpatterns,
     casos_urlpatterns,
+    encaminhamentos_urlpatterns,
     fila_urlpatterns,
     recepcao_urlpatterns,
 )
@@ -21,4 +23,6 @@ urlpatterns = [
     path('api/queues/', include((fila_urlpatterns, 'fila'))),
     path('api/cases/', include((casos_urlpatterns, 'casos'))),
     path('api/itinerant-actions/', include((acoes_urlpatterns, 'acoes'))),
+    path('api/referrals/', include((encaminhamentos_urlpatterns, 'encaminhamentos'))),
+    path('api/notices/', include((avisos_urlpatterns, 'avisos'))),
 ]

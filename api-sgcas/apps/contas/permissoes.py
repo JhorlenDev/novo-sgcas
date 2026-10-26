@@ -77,5 +77,35 @@ class PodeConsultar(TemPapel):
     )
 
 
+class ComunicacaoEntreUnidades(TemPapel):
+    """
+    Encaminhamentos e avisos entre unidades: quem atende e quem recebe no balcão.
+
+    O VISUALIZADOR fica de fora: consulta o cadastro e o histórico, mas a
+    comunicação entre as equipes é de quem trabalha o atendimento. O que cada
+    papel enxerga *dentro* dela é decidido por `ve_o_relato`.
+    """
+
+    papeis = (
+        Papel.ADMIN,
+        Papel.COORDENADOR,
+        Papel.ASSISTENTE_SOCIAL,
+        Papel.TECNICO,
+        Papel.RECEPCIONISTA,
+        Papel.GESTOR_ACOES_ITINERANTES,
+    )
+
+
+def ve_o_relato(operador) -> bool:
+    """
+    Os técnicos veem a ficha inteira; a recepção, só o resumo.
+
+    O relato por trás de um encaminhamento pode falar de violência ou de saúde. A
+    recepção precisa saber que a pessoa foi encaminhada, de onde, quando e por
+    qual categoria de motivo — não o que ela viveu.
+    """
+    return operador.papel in EquipeDeAtendimento.papeis
+
+
 class QualquerOperador(TemPapel):
     papeis = tuple(vars(Papel)[n] for n in dir(Papel) if not n.startswith('_'))

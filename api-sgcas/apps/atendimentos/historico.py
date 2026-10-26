@@ -27,7 +27,7 @@ from datetime import datetime
 
 from django.utils import timezone
 
-from apps.atendimentos.models import AtendimentoDeRecepcao, BeneficioEventual, Caso
+from apps.atendimentos.models import AtendimentoDeRecepcao, BeneficioEventual, Caso, Encaminhamento
 from apps.cidadaos.models import Cidadao
 from apps.contas.models import Operador
 
@@ -172,6 +172,27 @@ def do_cidadao(cidadao: Cidadao, leitor: Operador) -> list[Entrada]:
             quem_atendeu=r.atendido_por.nome if mostra_quem else None,
             no_mes_corrente=_mesmo_mes(r.criado_em),
             _outra_unidade=r.unidade_id != unidade_do_leitor,
+        ))
+
+    # O encaminhamento entre unidades. Só a categoria do motivo: o relato por trás
+    # dele fica na ficha, que é dos técnicos — e a recepção também lê esta linha.
+    situacoes = {valor: rotulo.lower() for valor, rotulo in Encaminhamento.Situacao.choices}
+    categorias = dict(Encaminhamento.Categoria.choices)
+    enviados = (
+        Encaminhamento.objects.filter(caso__cidadao=cidadao, criado_em__gte=desde)
+        .select_related('unidade_origem', 'unidade_destino', 'encaminhado_por')
+    )
+    for e in enviados:
+        origem = e.unidade_origem.nome if e.unidade_origem_id else 'Unidade não informada'
+        destino = e.unidade_destino.nome if e.unidade_destino_id else e.destino_externo
+        entradas.append(Entrada(
+            quando=_com_fuso(e.criado_em),
+            unidade=origem,
+            o_que=f'Encaminhado de {origem} para {destino} ({situacoes.get(e.situacao, e.situacao)})',
+            detalhe=categorias.get(e.categoria_do_motivo, e.categoria_do_motivo),
+            quem_atendeu=e.encaminhado_por.nome if mostra_quem else None,
+            no_mes_corrente=_mesmo_mes(e.criado_em),
+            _outra_unidade=e.unidade_origem_id != unidade_do_leitor,
         ))
 
     return sorted(entradas, key=lambda e: e.quando, reverse=True)

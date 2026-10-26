@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.atendimentos import api
+from apps.atendimentos import api, api_encaminhamentos
 
 recepcao_urlpatterns = [
     path('atendimento', api.registrar_recepcao, name='recepcao-registrar'),
@@ -32,4 +32,20 @@ acoes_urlpatterns = [
     path('<str:acao_id>/concluir', api.concluir_acao_itinerante, name='acao-concluir'),
     path('<str:acao_id>/balanco', api.balanco_acao_itinerante, name='acao-balanco'),
     path('<str:acao_id>/excluir', api.excluir_acao_itinerante, name='acao-excluir'),
+]
+
+encaminhamentos_urlpatterns = [
+    path('recebidos', api_encaminhamentos.recebidos, name='encaminhamentos-recebidos'),
+    path('enviados', api_encaminhamentos.enviados, name='encaminhamentos-enviados'),
+    path('<str:encaminhamento_id>', api_encaminhamentos.detalhar, name='encaminhamento-detalhe'),
+    path('<str:encaminhamento_id>/aceitar', api_encaminhamentos.aceitar, name='encaminhamento-aceitar'),
+    path('<str:encaminhamento_id>/recusar', api_encaminhamentos.recusar, name='encaminhamento-recusar'),
+    path('<str:encaminhamento_id>/concluir', api_encaminhamentos.concluir, name='encaminhamento-concluir'),
+]
+
+avisos_urlpatterns = [
+    path('', api_encaminhamentos.avisos, name='avisos'),
+    path('resumo', api_encaminhamentos.resumo_dos_avisos, name='avisos-resumo'),
+    path('lidos', api_encaminhamentos.marcar_todos_como_lidos, name='avisos-lidos'),
+    path('<str:aviso_id>/lido', api_encaminhamentos.marcar_como_lido, name='aviso-lido'),
 ]
