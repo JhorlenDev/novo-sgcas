@@ -11,7 +11,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.contas import keycloak
 from apps.contas.autenticacao import CHAVE_ID_TOKEN, CHAVE_OPERADOR
-from apps.contas.servicos import AcessoPendente, entrar, registrar_pedido
+from apps.contas.servicos import AcessoPendente, ContaEmConflito, entrar, registrar_pedido
 
 CHAVE_STATE = 'kc_state'
 CHAVE_PEDIDO_ACESSO = 'pending_access_claims'
@@ -76,6 +76,12 @@ def callback(request):
         }
         logger.warning('Login Keycloak pendente: usuario sem papel SGCAS no client.')
         return HttpResponseRedirect(_frontend('/waiting-approval'))
+    except ContaEmConflito as erro:
+        logger.warning(
+            'Login Keycloak recusado: %s. keycloak_id=%s email=%s',
+            erro.motivo, claims.get('sub'), claims.get('email'),
+        )
+        return HttpResponseRedirect(_frontend(f'/login?erro={erro.motivo}'))
     except keycloak.ErroDoKeycloak as erro:
         logger.warning('Erro no login Keycloak: %s', erro)
         return HttpResponseRedirect(_frontend('/login?erro=sem-acesso'))

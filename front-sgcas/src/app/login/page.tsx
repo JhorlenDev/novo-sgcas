@@ -21,6 +21,14 @@ const errors: Record<string, { title: string; text: string }> = {
     title: "Retorno incompleto",
     text: "O Tefé Cidadão não devolveu o código de acesso. Tente entrar outra vez.",
   },
+  "conta-em-conflito": {
+    title: "E-mail já vinculado a outra conta",
+    text: "O e-mail desta conta já está associado a outro usuário do SGCAS. Procure o administrador para resolver a duplicidade.",
+  },
+  "email-nao-confirmado": {
+    title: "E-mail ainda não confirmado",
+    text: "Confirme o e-mail da sua conta no Tefé Cidadão e tente entrar outra vez. Se continuar, procure o administrador.",
+  },
 };
 
 export default function LoginPage() {

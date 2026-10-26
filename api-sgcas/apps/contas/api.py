@@ -24,6 +24,7 @@ from apps.contas.serializers import (
     OperadorSerializer,
     PedidoDeAcessoSerializer,
 )
+from apps.contas.servicos import ContaEmConflito, localizar_operador
 from apps.institucional.models import Unidade
 
 
@@ -87,10 +88,22 @@ def aprovar(request, pedido_id: str):
     if pedido.situacao != PedidoDeAcesso.Situacao.PENDENTE:
         raise ValidationError({'situacao': 'Este pedido já foi decidido'})
 
+    # Antes de tocar no realm: um conflito detectado depois deixaria o papel
+    # concedido no Tefé Cidadão com a aprovação negada aqui. Quem aprova é o
+    # administrador, que pode adotar uma conta antiga sem vínculo pelo e-mail;
+    # o que nunca se faz é tomar a conta ligada a outra identidade.
+    try:
+        operador = localizar_operador(pedido.keycloak_id, pedido.email, email_confirmado=True)
+    except ContaEmConflito:
+        return Response(
+            {'detalhe': 'Já existe um operador com este e-mail ligado a outra conta do '
+                        'Tefé Cidadão. Resolva a duplicidade antes de aprovar.'},
+            status=status.HTTP_409_CONFLICT,
+        )
+
     keycloak.definir_papel(pedido.keycloak_id, papel)
 
     agora = timezone.now()
-    operador = Operador.objects.filter(email=pedido.email).first()
     if operador is None:
         operador = Operador(
             id=str(uuid.uuid4()), email=pedido.email, nome=pedido.nome,

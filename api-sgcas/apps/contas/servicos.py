@@ -23,11 +23,60 @@ class AcessoPendente(Exception):
     """
 
 
+MOTIVO_OUTRA_IDENTIDADE = 'conta-em-conflito'
+MOTIVO_EMAIL_NAO_CONFIRMADO = 'email-nao-confirmado'
+
+
+class ContaEmConflito(Exception):
+    """
+    O e-mail já pertence a um operador que não pode ser ligado a esta identidade.
+
+    Ou o operador já está ligado a *outra* identidade do Tefé Cidadão, ou é uma
+    conta antiga sem vínculo e o Tefé Cidadão não garante que a pessoa é dona do
+    e-mail. Em nenhum dos dois a conta pode ser entregue a quem chegou.
+    `motivo` diz qual e é o mesmo código que a tela de login usa para explicar.
+    """
+
+    def __init__(self, motivo: str):
+        super().__init__(motivo)
+        self.motivo = motivo
+
+
 def registrar_pedido(claims: dict) -> None:
     _registrar_pedido(claims)
 
 
-@transaction.atomic
+def localizar_operador(keycloak_id: str, email: str, email_confirmado: bool) -> Operador | None:
+    """
+    A conta local desta identidade do Tefé Cidadão, se houver.
+
+    A identidade é o `sub` do token: não muda quando a pessoa troca de e-mail e
+    não pode ser reivindicada por outra. O e-mail só serve para adotar uma conta
+    antiga que ainda não tem vínculo, e apenas quando o Tefé Cidadão garante que
+    a pessoa é dona dele. Casar só por e-mail entregava a conta de uma pessoa a
+    qualquer identidade que tivesse o mesmo e-mail.
+
+    Levanta `ContaEmConflito` quando o e-mail pertence a uma conta que não pode
+    ser entregue a quem chegou.
+    """
+    vinculado = Operador.objects.filter(keycloak_id=keycloak_id).first()
+    if vinculado is not None:
+        return vinculado
+
+    if not email:
+        return None
+    mesmo_email = Operador.objects.filter(email=email).first()
+    if mesmo_email is None:
+        return None
+
+    # Já tem vínculo, e não é com esta identidade (a nossa foi descartada acima).
+    if mesmo_email.keycloak_id:
+        raise ContaEmConflito(MOTIVO_OUTRA_IDENTIDADE)
+    if not email_confirmado:
+        raise ContaEmConflito(MOTIVO_EMAIL_NAO_CONFIRMADO)
+    return mesmo_email
+
+
 def entrar(access_token: str, claims: dict) -> Operador:
     """
     Resolve o operador a partir do token, ou registra um pedido de acesso.
@@ -36,6 +85,11 @@ def entrar(access_token: str, claims: dict) -> Operador:
     papel de leitura e ficava numa fila de aprovacao manual: qualquer cidadao
     com conta no Tefe Cidadao virava usuario so por clicar no botao, e a
     autorizacao real era um checkbox decidido por quem via apenas nome e e-mail.
+
+    Nao e uma transacao unica de proposito: o pedido de acesso tem de ficar
+    gravado mesmo com `AcessoPendente` levantada logo depois. Com tudo dentro de
+    um `atomic`, a excecao desfazia o pedido, e a pessoa via a tela de espera
+    sem que o administrador jamais soubesse dela.
     """
     papel = papel_efetivo(papeis_do_token(access_token, settings.KEYCLOAK_CLIENT_ID))
 
@@ -46,33 +100,37 @@ def entrar(access_token: str, claims: dict) -> Operador:
     email = claims.get('email') or claims.get('preferred_username') or ''
     nome = claims.get('name') or claims.get('preferred_username') or email
     keycloak_id = claims['sub']
+    # A confirmação vale para o e-mail de verdade; o nome de usuário usado como
+    # reserva quando não há e-mail não é e-mail de ninguém.
+    email_confirmado = bool(claims.get('email')) and claims.get('email_verified') is True
 
-    existente = Operador.objects.filter(email=email).first()
-    agora = timezone.now()
+    with transaction.atomic():
+        existente = localizar_operador(keycloak_id, email, email_confirmado)
+        agora = timezone.now()
 
-    if existente is None:
-        operador = Operador(
-            id=str(uuid.uuid4()),
-            email=email,
-            nome=nome,
-            papel=papel,
-            ativo=True,
-            keycloak_id=keycloak_id,
-            criado_em=agora,
-            atualizado_em=agora,
-        )
-        operador.save(force_insert=True)
-        return operador
+        if existente is None:
+            operador = Operador(
+                id=str(uuid.uuid4()),
+                email=email,
+                nome=nome,
+                papel=papel,
+                ativo=True,
+                keycloak_id=keycloak_id,
+                criado_em=agora,
+                atualizado_em=agora,
+            )
+            operador.save(force_insert=True)
+            return operador
 
-    # O papel e espelhado a cada entrada: o realm e a fonte da verdade, e a
-    # coluna local serve as consultas e a referencia da auditoria.
-    existente.papel = papel
-    existente.ativo = True
-    existente.keycloak_id = existente.keycloak_id or keycloak_id
-    existente.excluido_em = None
-    existente.atualizado_em = agora
-    existente.save(update_fields=['papel', 'ativo', 'keycloak_id', 'excluido_em', 'atualizado_em'])
-    return existente
+        # O papel e espelhado a cada entrada: o realm e a fonte da verdade, e a
+        # coluna local serve as consultas e a referencia da auditoria.
+        existente.papel = papel
+        existente.ativo = True
+        existente.keycloak_id = keycloak_id
+        existente.excluido_em = None
+        existente.atualizado_em = agora
+        existente.save(update_fields=['papel', 'ativo', 'keycloak_id', 'excluido_em', 'atualizado_em'])
+        return existente
 
 
 def _registrar_pedido(claims: dict) -> None:
