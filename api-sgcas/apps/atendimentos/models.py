@@ -119,6 +119,13 @@ class SenhaDaFila(models.Model):
     prioridade = models.TextField(db_column='priority', default=Caso.Prioridade.NORMAL)
     situacao = models.TextField(db_column='status', default=Situacao.AGUARDANDO)
     servico = models.TextField(db_column='serviceName', blank=True, null=True)
+    # O caso que esta senha atende. Sem isto, chamar a senha procura "o caso
+    # aberto mais recente da pessoa na unidade", e um caso encaminhado de outra
+    # unidade (aberto há mais tempo) perderia para qualquer caso novo.
+    caso = models.ForeignKey(
+        'atendimentos.Caso', models.SET_NULL, db_column='caseId',
+        blank=True, null=True, related_name='senhas',
+    )
     atendido_por = models.ForeignKey(
         'contas.Operador', models.DO_NOTHING, db_column='attendedById',
         blank=True, null=True, related_name='senhas_atendidas',
@@ -172,6 +179,10 @@ class BeneficioEventual(models.Model):
         'contas.Operador', models.DO_NOTHING, db_column='registeredById',
         related_name='beneficios_registrados',
     )
+    # Preenchida quando o mesmo benefício já tinha sido concedido no mês e quem
+    # registrou decidiu seguir assim mesmo: o aviso não bloqueia, mas exige que
+    # o porquê fique escrito, onde as outras unidades possam ler.
+    justificativa_duplicidade = models.TextField(db_column='duplicateJustification', blank=True, null=True)
     unidade = models.ForeignKey(
         'institucional.Unidade', models.DO_NOTHING, db_column='unitId',
         blank=True, null=True, related_name='beneficios',
@@ -321,6 +332,17 @@ class AtendimentoDeRecepcao(models.Model):
     # para a próxima unidade que atender esta pessoa.
     motivo = models.TextField(db_column='reason', blank=True, null=True)
 
+    # Preenchida quando o pedido repetia um benefício já concedido no mês e a
+    # recepção decidiu atender assim mesmo (ver `apps.atendimentos.duplicidade`).
+    justificativa_duplicidade = models.TextField(db_column='duplicateJustification', blank=True, null=True)
+
+    # O encaminhamento que esta visita cumpre: a pessoa veio de outra unidade e o
+    # atendimento continua o mesmo caso, em vez de abrir um segundo.
+    encaminhamento = models.ForeignKey(
+        'atendimentos.Encaminhamento', models.SET_NULL, db_column='referralId',
+        blank=True, null=True, related_name='visitas_de_recepcao',
+    )
+
     caso = models.ForeignKey(
         'atendimentos.Caso', models.DO_NOTHING, db_column='caseId',
         blank=True, null=True, related_name='atendimentos_de_recepcao',
@@ -344,16 +366,23 @@ class AtendimentoDeRecepcao(models.Model):
 
 class Encaminhamento(models.Model):
     """
-    Quando o caso precisa de outro serviço — outra unidade ou fora da rede.
+    A ficha que passa de uma unidade a outra — ou a um serviço fora da rede.
 
     O destino pode ser interno (outro CRAS, o CREAS) ou externo (Conselho
     Tutelar, saúde, Defensoria). São coisas diferentes: o interno precisa
-    *chegar* na unidade de destino e aparecer para a equipe de lá; o externo é
-    registro de que a pessoa foi orientada a procurar outro órgão.
+    *chegar* na unidade de destino, aparecer para a equipe de lá e ser respondido
+    (aceito, recusado, concluído), e quem encaminhou precisa ser avisado do que
+    aconteceu; o externo é registro de que a pessoa foi orientada a procurar
+    outro órgão.
 
-    Por isso os dois campos: `unidade_destino` quando é da rede, e
-    `destino_externo` quando não é. Sem o primeiro, encaminhar para outro CRAS
-    viraria um texto que ninguém do outro lado jamais leria.
+    A ficha guarda o que a origem sabia no momento (`ficha`, uma fotografia: o
+    que a pessoa pediu, o que recebeu, o relato até ali) e o que o técnico
+    acrescentou (motivo, resumo da situação, documentos, contato e prazo). O
+    destino lê isso sem precisar telefonar — e sem a conversa que hoje leva
+    horas, às vezes dias.
+
+    Por isso os dois campos de destino: `unidade_destino` quando é da rede, e
+    `destino_externo` quando não é.
     """
 
     class Situacao(models.TextChoices):
@@ -361,6 +390,21 @@ class Encaminhamento(models.Model):
         ACEITO = 'ACEITO', 'Aceito'
         RECUSADO = 'RECUSADO', 'Recusado'
         CONCLUIDO = 'CONCLUIDO', 'Concluído'
+
+    class Categoria(models.TextChoices):
+        """
+        Por que a pessoa segue para outro lugar, em uma palavra. É o que a
+        recepção do destino vê: o relato que está por trás pode falar de
+        violência ou de saúde, e quem está no balcão não precisa dele.
+        """
+
+        VIOLACAO_DE_DIREITOS = 'VIOLACAO_DE_DIREITOS', 'Violação de direitos'
+        SITUACAO_DE_RUA = 'SITUACAO_DE_RUA', 'Situação de rua'
+        ACOMPANHAMENTO_FAMILIAR = 'ACOMPANHAMENTO_FAMILIAR', 'Acompanhamento familiar'
+        BENEFICIO_EVENTUAL = 'BENEFICIO_EVENTUAL', 'Benefício eventual'
+        SAUDE = 'SAUDE', 'Saúde'
+        DOCUMENTACAO = 'DOCUMENTACAO', 'Documentação'
+        OUTRO = 'OUTRO', 'Outro'
 
     id = models.TextField(primary_key=True)
     caso = models.ForeignKey(
@@ -371,14 +415,47 @@ class Encaminhamento(models.Model):
         'contas.Operador', models.DO_NOTHING, db_column='referredById',
         related_name='encaminhamentos_feitos',
     )
+    # Nulo nos encaminhamentos anteriores a este campo.
+    unidade_origem = models.ForeignKey(
+        'institucional.Unidade', models.DO_NOTHING, db_column='originUnitId',
+        blank=True, null=True, related_name='encaminhamentos_enviados',
+    )
     unidade_destino = models.ForeignKey(
         'institucional.Unidade', models.DO_NOTHING, db_column='targetUnitId',
         blank=True, null=True, related_name='encaminhamentos_recebidos',
     )
     destino_externo = models.TextField(db_column='targetEntity')
+
+    # ─── a ficha ───
+    categoria_do_motivo = models.TextField(
+        db_column='reasonCategory', choices=Categoria.choices, default=Categoria.OUTRO,
+    )
+    urgencia = models.TextField(db_column='urgency', default=Caso.Prioridade.NORMAL)
     motivo = models.TextField(db_column='reason')
-    situacao = models.TextField(db_column='status', default=Situacao.PENDENTE)
+    resumo_da_situacao = models.TextField(db_column='situationSummary', blank=True, null=True)
+    documentos_entregues = models.TextField(db_column='deliveredDocuments', blank=True, null=True)
+    # Telefone ou referência para falar com a pessoa ou com a família: dado
+    # pessoal, apagado na eliminação (apps.cidadaos.eliminacao).
+    contato_para_retorno = models.TextField(db_column='returnContact', blank=True, null=True)
+    prazo = models.DateField(db_column='deadline', blank=True, null=True)
     observacoes = models.TextField(db_column='notes', blank=True, null=True)
+    # O que a origem sabia quando encaminhou. Fotografia, não consulta: o destino
+    # lê o que foi enviado, mesmo que o caso mude depois.
+    ficha = models.JSONField(db_column='sheetSnapshot', blank=True, null=True)
+
+    # ─── o ciclo de vida ───
+    situacao = models.TextField(db_column='status', default=Situacao.PENDENTE)
+    respondido_por = models.ForeignKey(
+        'contas.Operador', models.DO_NOTHING, db_column='answeredById',
+        blank=True, null=True, related_name='encaminhamentos_respondidos',
+    )
+    respondido_em = models.DateTimeField(db_column='answeredAt', blank=True, null=True)
+    # Motivo da recusa, ou a observação de quem aceitou.
+    resposta = models.TextField(db_column='answer', blank=True, null=True)
+    chegou_em = models.DateTimeField(db_column='arrivedAt', blank=True, null=True)
+    concluido_em = models.DateTimeField(db_column='concludedAt', blank=True, null=True)
+    resultado = models.TextField(db_column='outcome', blank=True, null=True)
+
     criado_em = models.DateTimeField(db_column='createdAt')
     atualizado_em = models.DateTimeField(db_column='updatedAt')
 
@@ -396,3 +473,63 @@ class Encaminhamento(models.Model):
     @property
     def e_interno(self) -> bool:
         return self.unidade_destino_id is not None
+
+
+class Aviso(models.Model):
+    """
+    O que uma unidade precisa saber sobre o que outra unidade fez.
+
+    É da unidade, não de uma pessoa: o CREAS inteiro vê que chegou um
+    encaminhamento, e qualquer um da equipe pode marcá-lo como lido.
+
+    Não guarda o texto da mensagem: guarda o tipo e a ligação com o
+    encaminhamento e o cidadão, e o texto é montado na hora de mostrar. Assim o
+    nome da pessoa vem sempre do cadastro — e depois de uma eliminação LGPD o
+    aviso passa a dizer "Cidadão excluído xxxxxxxx" sem que ninguém tenha de
+    procurar o nome dentro de textos gravados.
+    """
+
+    class Tipo(models.TextChoices):
+        ENCAMINHAMENTO_RECEBIDO = 'ENCAMINHAMENTO_RECEBIDO', 'Encaminhamento recebido'
+        ENCAMINHAMENTO_ACEITO = 'ENCAMINHAMENTO_ACEITO', 'Encaminhamento aceito'
+        ENCAMINHAMENTO_RECUSADO = 'ENCAMINHAMENTO_RECUSADO', 'Encaminhamento recusado'
+        PESSOA_CHEGOU = 'PESSOA_CHEGOU', 'Pessoa chegou à unidade'
+        ENCAMINHAMENTO_CONCLUIDO = 'ENCAMINHAMENTO_CONCLUIDO', 'Atendimento concluído'
+        ENCAMINHADO_ADIANTE = 'ENCAMINHADO_ADIANTE', 'Encaminhado para outra unidade'
+        BENEFICIO_REPETIDO = 'BENEFICIO_REPETIDO', 'Benefício concedido novamente'
+
+    id = models.TextField(primary_key=True)
+    unidade = models.ForeignKey(
+        'institucional.Unidade', models.DO_NOTHING, db_column='unitId', related_name='avisos',
+    )
+    tipo = models.TextField(db_column='type', choices=Tipo.choices)
+    encaminhamento = models.ForeignKey(
+        'atendimentos.Encaminhamento', models.SET_NULL, db_column='referralId',
+        blank=True, null=True, related_name='avisos',
+    )
+    cidadao = models.ForeignKey(
+        'cidadaos.Cidadao', models.DO_NOTHING, db_column='citizenId',
+        blank=True, null=True, related_name='avisos',
+    )
+    # Só o que não identifica ninguém: nome de unidade, categoria. Montar o texto
+    # com isto e com o cadastro é o que mantém o aviso consistente.
+    dados = models.JSONField(db_column='data', blank=True, null=True)
+    criado_em = models.DateTimeField(db_column='createdAt')
+    lido_em = models.DateTimeField(db_column='readAt', blank=True, null=True)
+    lido_por = models.ForeignKey(
+        'contas.Operador', models.DO_NOTHING, db_column='readById',
+        blank=True, null=True, related_name='avisos_lidos',
+    )
+
+    class Meta:
+        managed = True
+        db_table = 'notices'
+        verbose_name = 'aviso'
+        verbose_name_plural = 'avisos'
+        ordering = ['-criado_em']
+        indexes = [
+            models.Index(fields=['unidade', 'lido_em', '-criado_em'], name='aviso_unidade_lido_idx'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.tipo} para {self.unidade_id}'

@@ -9,7 +9,8 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
-from apps.atendimentos import historico
+from apps.atendimentos import encaminhamentos, historico
+from apps.atendimentos.relato import acrescentar_ao_relato as _acrescentar_ao_relato
 from apps.atendimentos.models import (
     AcaoItinerante,
     AtendimentoDeRecepcao,
@@ -89,20 +90,6 @@ def _caso_encerrado(caso):
         {'detalhe': f'Este caso já foi encerrado ({rotulo}).'},
         status=status.HTTP_409_CONFLICT,
     )
-
-
-def _acrescentar_ao_relato(caso, operador, momento, texto: str) -> None:
-    """
-    Acrescenta uma anotação datada e assinada ao relato do caso.
-
-    O relato é um histórico — a observação da recepção, a evolução durante o
-    atendimento, a conclusão —, e quem atende depois lê tudo isso. Por isso toda
-    escrita nele acrescenta; substituir apagaria o que os colegas registraram.
-    O chamador salva o caso.
-    """
-    marca = timezone.localtime(momento).strftime('%d/%m/%Y %H:%M')
-    anotacao = f'[{marca}] {operador.nome}: {texto}'
-    caso.descricao = f'{caso.descricao}\n\n{anotacao}' if caso.descricao else anotacao
 
 
 def _ordem_de_prioridade():
@@ -519,11 +506,14 @@ def casos(request):
 @transaction.atomic
 def encaminhar(request, caso_id: str):
     """
-    Encaminha o caso para outra unidade da rede ou para um serviço externo.
+    Encaminha o caso, com a ficha, para outra unidade da rede ou para um serviço
+    externo.
 
-    Encaminhar para dentro da rede muda a unidade do caso: ele passa a aparecer
-    para a equipe de destino. Sem isso o encaminhamento seria um bilhete que
-    ninguém do outro lado leria — que é o problema que ele deveria resolver.
+    Encaminhar para dentro da rede muda a unidade do caso e avisa a unidade de
+    destino: sem isso o encaminhamento seria um bilhete que ninguém do outro lado
+    leria — que é o problema que ele deveria resolver. A ficha leva o que a
+    origem sabia (o que a pessoa pediu, o que recebeu, o relato) e o que o
+    técnico acrescentou. Ver `apps.atendimentos.encaminhamentos`.
     """
     dados = NovoEncaminhamentoSerializer(data=request.data)
     dados.is_valid(raise_exception=True)
@@ -540,29 +530,19 @@ def encaminhar(request, caso_id: str):
         return encerrado
 
     destino_id = (d.get('unidade_destino_id') or '').strip() or None
-    if destino_id and not Unidade.ativas.filter(id=destino_id).exists():
+    destino = Unidade.ativas.filter(id=destino_id).first() if destino_id else None
+    if destino_id and destino is None:
         return Response({'unidade_destino_id': 'Unidade não encontrada'},
                         status=status.HTTP_400_BAD_REQUEST)
 
     agora = timezone.now()
-    destino = Unidade.ativas.filter(id=destino_id).first() if destino_id else None
-
-    encaminhamento = Encaminhamento(
-        id=str(uuid.uuid4()), caso=caso, encaminhado_por=request.user,
-        unidade_destino=destino,
-        destino_externo=destino.nome if destino else d['destino_externo'].strip(),
-        motivo=d['motivo'], observacoes=d.get('observacoes') or None,
-        criado_em=agora, atualizado_em=agora,
-    )
-    encaminhamento.save(force_insert=True)
-
-    caso.situacao = Caso.Situacao.ENCAMINHADO
-    campos = ['situacao', 'atualizado_em']
-    if destino:
-        caso.unidade = destino
-        campos.append('unidade')
-    caso.atualizado_em = agora
-    caso.save(update_fields=campos)
+    try:
+        encaminhamento = encaminhamentos.criar(
+            caso=caso, operador=request.user, destino=destino,
+            destino_externo=(d.get('destino_externo') or '').strip(), dados=d, agora=agora,
+        )
+    except encaminhamentos.EncaminhamentoInvalido as erro:
+        return Response(erro.corpo, status=erro.status)
 
     SenhaDaFila.objects.filter(
         cidadao_id=caso.cidadao_id,

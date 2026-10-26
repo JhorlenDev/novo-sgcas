@@ -59,14 +59,6 @@ class ConcluirPreservaOHistorico(_CasoEmAtendimento):
         descricao = Caso.objects.get(pk=caso_id).descricao
         self.assertRegex(descricao, PADRAO_DA_ANOTACAO + r'Concluído\. Cesta entregue$')
 
-    def test_concluir_como_encaminhado_diz_que_foi_encaminhado(self):
-        caso_id = self.abrir()
-        self.post(f'/api/cases/{caso_id}/concluir', {'situacao': 'ENCAMINHADO', 'relato': 'Segue para o CREAS'})
-
-        caso = Caso.objects.get(pk=caso_id)
-        self.assertEqual(caso.situacao, Caso.Situacao.ENCAMINHADO)
-        self.assertRegex(caso.descricao, PADRAO_DA_ANOTACAO + r'Encaminhado\. Segue para o CREAS$')
-
     def test_continua_encerrando_o_caso_e_liberando_a_senha(self):
         caso_id = self.abrir()
         self.post(f'/api/cases/{caso_id}/concluir', {'situacao': 'CONCLUIDO', 'relato': 'Cesta entregue'})

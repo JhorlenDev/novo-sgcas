@@ -32,12 +32,16 @@ RELATOS = frozenset({
     'descricao', 'description', 'relato', 'observacao', 'observacoes',
     'notes', 'motivo', 'reason', 'justificativa', 'observations',
     'tipo_outro', 'typeother',
+    # Ficha de encaminhamento e justificativas entre unidades.
+    'resumo_da_situacao', 'documentos_entregues', 'resposta', 'resultado',
+    'justificativa_duplicidade',
 })
 
 IDENTIFICADORES = frozenset({
     'cpf', 'nis', 'rg', 'email', 'telefone', 'phone', 'cep', 'zipcode',
     'endereco', 'address', 'logradouro', 'numero', 'complemento',
     'nome_original', 'nome_arquivo', 'caminho_local',
+    'contato_para_retorno',
 })
 
 

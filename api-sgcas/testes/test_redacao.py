@@ -38,3 +38,19 @@ class TresNiveisDeRedacao(SimpleTestCase):
 
     def test_campo_comum_passa_intacto(self):
         self.assertEqual(redigir({'prioridade': 'ALTA'})['prioridade'], 'ALTA')
+
+    def test_campos_da_ficha_de_encaminhamento_sao_redigidos(self):
+        saida = redigir({
+            'resumo_da_situacao': 'Mulher relata agressões', 'documentos_entregues': 'RG e CPF',
+            'contato_para_retorno': '(97) 99999-1234', 'resposta': 'Recusado: fora do perfil',
+            'resultado': 'Acompanhamento iniciado', 'justificativa_duplicidade': 'Família numerosa',
+            'categoria_do_motivo': 'SAUDE', 'urgencia': 'ALTA',
+        })
+        self.assertTrue(saida['resumo_da_situacao'].startswith('[REDIGIDO:'))
+        self.assertTrue(saida['documentos_entregues'].startswith('[REDIGIDO:'))
+        self.assertTrue(saida['resposta'].startswith('[REDIGIDO:'))
+        self.assertTrue(saida['resultado'].startswith('[REDIGIDO:'))
+        self.assertTrue(saida['justificativa_duplicidade'].startswith('[REDIGIDO:'))
+        self.assertEqual(saida['contato_para_retorno'], '[REDIGIDO]')
+        self.assertEqual(saida['categoria_do_motivo'], 'SAUDE')
+        self.assertEqual(saida['urgencia'], 'ALTA')

@@ -1,3 +1,4 @@
+from django.utils import timezone
 from rest_framework import serializers
 
 from apps.atendimentos.models import (
@@ -175,32 +176,103 @@ class RegistroDeRecepcaoSerializer(serializers.Serializer):
 
 
 class EncaminhamentoSerializer(serializers.ModelSerializer):
-    unidade_destino_nome = serializers.CharField(
-        source='unidade_destino.nome', read_only=True, default=None
-    )
+    """
+    O encaminhamento como os técnicos o veem: tudo, menos a fotografia (`ficha`),
+    que vai só no detalhe para não pesar a lista.
+    """
+
+    cidadao = serializers.CharField(source='caso.cidadao_id', read_only=True)
+    cidadao_nome = serializers.CharField(source='caso.cidadao.nome', read_only=True)
+    caso_protocolo = serializers.CharField(source='caso.protocolo', read_only=True)
+    categoria_rotulo = serializers.SerializerMethodField()
+    urgencia_rotulo = serializers.SerializerMethodField()
+    unidade_origem_nome = serializers.CharField(source='unidade_origem.nome', read_only=True, default=None)
+    unidade_destino_nome = serializers.CharField(source='unidade_destino.nome', read_only=True, default=None)
     encaminhado_por_nome = serializers.CharField(source='encaminhado_por.nome', read_only=True)
+    respondido_por_nome = serializers.CharField(source='respondido_por.nome', read_only=True, default=None)
 
     class Meta:
         model = Encaminhamento
         fields = [
-            'id', 'caso', 'situacao', 'motivo', 'observacoes',
-            'unidade_destino', 'unidade_destino_nome', 'destino_externo',
-            'encaminhado_por_nome', 'criado_em',
+            'id', 'caso', 'caso_protocolo', 'cidadao', 'cidadao_nome', 'situacao',
+            'categoria_do_motivo', 'categoria_rotulo', 'urgencia', 'urgencia_rotulo',
+            'motivo', 'resumo_da_situacao', 'documentos_entregues', 'contato_para_retorno',
+            'prazo', 'observacoes',
+            'unidade_origem', 'unidade_origem_nome', 'unidade_destino', 'unidade_destino_nome',
+            'destino_externo', 'encaminhado_por_nome',
+            'respondido_por_nome', 'respondido_em', 'resposta', 'chegou_em',
+            'concluido_em', 'resultado', 'criado_em',
         ]
+
+    def get_categoria_rotulo(self, obj):
+        return dict(Encaminhamento.Categoria.choices).get(obj.categoria_do_motivo, obj.categoria_do_motivo)
+
+    def get_urgencia_rotulo(self, obj):
+        return dict(Caso.Prioridade.choices).get(obj.urgencia, obj.urgencia)
+
+
+class EncaminhamentoDetalheSerializer(EncaminhamentoSerializer):
+    class Meta(EncaminhamentoSerializer.Meta):
+        fields = EncaminhamentoSerializer.Meta.fields + ['ficha']
+
+
+class EncaminhamentoResumoSerializer(serializers.ModelSerializer):
+    """
+    O que a recepção vê: quem, de onde, quando e a categoria do motivo.
+
+    Sem o relato. O que está por trás de um encaminhamento pode falar de
+    violência doméstica ou de saúde, e quem atende no balcão precisa saber que a
+    pessoa foi encaminhada e por que tipo de motivo — não o que ela viveu. Nem o
+    nome de quem encaminhou: a unidade basta.
+    """
+
+    cidadao = serializers.CharField(source='caso.cidadao_id', read_only=True)
+    cidadao_nome = serializers.CharField(source='caso.cidadao.nome', read_only=True)
+    categoria_rotulo = serializers.SerializerMethodField()
+    urgencia_rotulo = serializers.SerializerMethodField()
+    unidade_origem_nome = serializers.CharField(source='unidade_origem.nome', read_only=True, default=None)
+    unidade_destino_nome = serializers.CharField(source='unidade_destino.nome', read_only=True, default=None)
+
+    class Meta:
+        model = Encaminhamento
+        fields = [
+            'id', 'cidadao', 'cidadao_nome', 'situacao',
+            'categoria_do_motivo', 'categoria_rotulo', 'urgencia', 'urgencia_rotulo', 'prazo',
+            'unidade_origem', 'unidade_origem_nome', 'unidade_destino', 'unidade_destino_nome',
+            'destino_externo', 'chegou_em', 'concluido_em', 'criado_em',
+        ]
+
+    get_categoria_rotulo = EncaminhamentoSerializer.get_categoria_rotulo
+    get_urgencia_rotulo = EncaminhamentoSerializer.get_urgencia_rotulo
 
 
 class NovoEncaminhamentoSerializer(serializers.Serializer):
     """
-    Um destino, e apenas um: interno ou externo.
+    A ficha que o técnico preenche.
 
-    Aceitar os dois deixaria ambíguo para onde a pessoa deve ir, e é o tipo de
-    ambiguidade que vira encaminhamento perdido.
+    Um destino, e apenas um: interno ou externo. Aceitar os dois deixaria
+    ambíguo para onde a pessoa deve ir, e é o tipo de ambiguidade que vira
+    encaminhamento perdido.
+
+    Categoria, motivo e resumo da situação são obrigatórios: é o que o destino
+    lê no lugar da conversa por papel. O resto ajuda, mas não trava.
     """
 
     unidade_destino_id = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     destino_externo = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    categoria_do_motivo = serializers.ChoiceField(choices=Encaminhamento.Categoria.choices)
+    urgencia = serializers.ChoiceField(choices=Caso.Prioridade.choices, default=Caso.Prioridade.NORMAL)
     motivo = serializers.CharField()
+    resumo_da_situacao = serializers.CharField()
+    documentos_entregues = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    contato_para_retorno = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    prazo = serializers.DateField(required=False, allow_null=True)
     observacoes = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def validate_prazo(self, valor):
+        if valor is not None and valor < timezone.localdate():
+            raise serializers.ValidationError('O prazo não pode estar no passado.')
+        return valor
 
     def validate(self, dados):
         interno = (dados.get('unidade_destino_id') or '').strip()
@@ -218,8 +290,11 @@ class NovoEncaminhamentoDoCidadaoSerializer(NovoEncaminhamentoSerializer):
 
 class ConclusaoSerializer(serializers.Serializer):
     relato = serializers.CharField()
+    # Só concluir. Encaminhar tem ficha própria: concluir "como encaminhado"
+    # encerrava o caso sem criar encaminhamento algum, e a outra unidade nunca
+    # ficava sabendo.
     situacao = serializers.ChoiceField(
-        choices=[(Caso.Situacao.CONCLUIDO, 'Concluído'), (Caso.Situacao.ENCAMINHADO, 'Encaminhado')],
+        choices=[(Caso.Situacao.CONCLUIDO, 'Concluído')],
         default=Caso.Situacao.CONCLUIDO,
     )
 

@@ -2,8 +2,9 @@
 Eliminação de dados pessoais (LGPD, Art. 18, VI).
 
 Elimina tudo que identifica ou descreve a pessoa: o cadastro inteiro, os
-documentos escaneados (no banco e no disco) e o nome copiado nos benefícios. O
-registro em si permanece, anônimo, para a integridade das referências.
+documentos escaneados (no banco e no disco), o nome copiado nos benefícios e o
+contato de retorno das fichas de encaminhamento. O registro em si permanece,
+anônimo, para a integridade das referências.
 
 Os textos livres dos atendimentos (relato do caso, motivo da recepção,
 observações de encaminhamento, descrição do benefício) ficam: por decisão da
@@ -16,7 +17,7 @@ from __future__ import annotations
 
 from django.db import transaction
 
-from apps.atendimentos.models import BeneficioEventual
+from apps.atendimentos.models import BeneficioEventual, Encaminhamento
 from apps.cidadaos import anexos
 from apps.cidadaos.models import Cidadao
 
@@ -56,6 +57,8 @@ def pendencias(cidadao: Cidadao) -> list[str]:
     faltando = list(restos_de_dados(cidadao))
     if BeneficioEventual.objects.filter(cidadao=cidadao).exclude(nome_da_pessoa=rotulo_anonimo(cidadao)).exists():
         faltando.append('nome nos benefícios')
+    if Encaminhamento.objects.filter(caso__cidadao=cidadao).exclude(contato_para_retorno__isnull=True).exists():
+        faltando.append('contato nos encaminhamentos')
     pasta = anexos.pasta_do_cidadao(cidadao.id)
     if pasta is not None and pasta.exists():
         faltando.append('arquivos em disco')
@@ -84,6 +87,9 @@ def eliminar(cidadao: Cidadao, agora) -> dict:
 
     # O nome da pessoa copiado nos benefícios. `objects` inclui os removidos.
     BeneficioEventual.objects.filter(cidadao=cidadao).update(nome_da_pessoa=rotulo)
+    # O telefone ou a referência para falar com a pessoa ou a família, na ficha de
+    # encaminhamento. O resto da ficha é relato e fica, como os demais.
+    Encaminhamento.objects.filter(caso__cidadao=cidadao).update(contato_para_retorno=None)
 
     cidadao_id = cidadao.id
     transaction.on_commit(lambda: anexos.remover_pasta_do_cidadao(cidadao_id))

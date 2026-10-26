@@ -27,7 +27,10 @@ class _Operacoes(_CasoEmAtendimento):
     def encaminhar(self, caso_id):
         return self.post(
             f'/api/cases/{caso_id}/encaminhar',
-            {'unidade_destino_id': self.centro.id, 'motivo': 'Precisa do CRAS Centro'},
+            {
+                'unidade_destino_id': self.centro.id, 'categoria_do_motivo': 'OUTRO',
+                'motivo': 'Precisa do CRAS Centro', 'resumo_da_situacao': 'Resumo da situação',
+            },
         )
 
     def estado(self, caso_id):

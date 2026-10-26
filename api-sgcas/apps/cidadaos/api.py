@@ -30,7 +30,7 @@ from apps.atendimentos.serializers import (
     NovoEncaminhamentoDoCidadaoSerializer,
     SenhaSerializer,
 )
-from apps.atendimentos import historico
+from apps.atendimentos import encaminhamentos, historico
 from apps.auditoria.redacao import redigir
 from apps.comum.rede import ip_do_cliente
 from apps.cidadaos.models import Cidadao
@@ -51,6 +51,7 @@ from apps.cidadaos import anexos as arquivos
 from apps.cidadaos import eliminacao
 from apps.cidadaos import pre_cadastro
 from apps.contas.permissoes import EquipeDeAtendimento, PodeConsultar, Recepcao, Supervisao
+from apps.contas.escopo import pode_acessar_unidade
 from apps.institucional.models import Unidade
 
 LIMITE_DA_BUSCA = 50
@@ -429,10 +430,12 @@ def registrar_beneficio(request, cidadao_id: str):
 @transaction.atomic
 def registrar_encaminhamento(request, cidadao_id: str):
     """
-    Registra encaminhamento pelo prontuário.
+    Registra encaminhamento, com a ficha, pelo prontuário.
 
-    Se o operador não informar um caso existente, o sistema abre um caso simples
-    para manter rastreabilidade do encaminhamento no acompanhamento.
+    Se o operador não informar um caso existente, o sistema abre um para manter a
+    rastreabilidade — com o resumo da situação como relato inicial — e o leva ao
+    destino. O caso informado precisa ser da unidade de quem encaminha e estar
+    aberto: antes, qualquer técnico encaminhava o caso de qualquer unidade.
     """
     cidadao = Cidadao.vigentes.filter(id=cidadao_id).first()
     if cidadao is None:
@@ -449,57 +452,48 @@ def registrar_encaminhamento(request, cidadao_id: str):
     dados.is_valid(raise_exception=True)
     d = dados.validated_data
 
-    unidade_destino = None
-    unidade_destino_id = (d.get('unidade_destino_id') or '').strip()
-    if unidade_destino_id:
-        unidade_destino = Unidade.ativas.filter(id=unidade_destino_id).first()
-        if unidade_destino is None:
+    destino = None
+    destino_id = (d.get('unidade_destino_id') or '').strip()
+    if destino_id:
+        destino = Unidade.ativas.filter(id=destino_id).first()
+        if destino is None:
             return Response({'unidade_destino_id': 'Unidade de destino não encontrada.'}, status=status.HTTP_400_BAD_REQUEST)
 
     agora = timezone.now()
     caso_id = (d.get('caso_id') or '').strip()
-    caso = None
     if caso_id:
-        caso = Caso.vigentes.filter(id=caso_id, cidadao=cidadao).first()
+        caso = Caso.vigentes.select_for_update().filter(id=caso_id, cidadao=cidadao).first()
         if caso is None:
             return Response({'caso_id': 'Caso não encontrado para este cidadão.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not pode_acessar_unidade(operador, caso.unidade_id):
+            return Response({'detalhe': 'Caso de outra unidade'}, status=status.HTTP_403_FORBIDDEN)
+        if caso.situacao in Caso.ENCERRADAS:
+            rotulo = dict(Caso.Situacao.choices).get(caso.situacao, caso.situacao)
+            return Response({'detalhe': f'Este caso já foi encerrado ({rotulo}).'}, status=status.HTTP_409_CONFLICT)
     else:
         caso = Caso(
             id=str(uuid.uuid4()),
             protocolo=_protocolo_do_prontuario(),
-            situacao=Caso.Situacao.ENCAMINHADO,
+            situacao=Caso.Situacao.EM_ATENDIMENTO,
             prioridade=Caso.Prioridade.NORMAL,
-            descricao=(d.get('motivo') or '').strip(),
+            descricao=d['resumo_da_situacao'].strip(),
             cidadao=cidadao,
             unidade=operador.unidade,
+            tecnico=operador,
             aberto_em=agora,
-            fechado_em=agora,
             ativo=True,
             criado_em=agora,
             atualizado_em=agora,
         )
         caso.save(force_insert=True)
 
-    destino_externo = (d.get('destino_externo') or '').strip()
-    encaminhamento = Encaminhamento(
-        id=str(uuid.uuid4()),
-        caso=caso,
-        encaminhado_por=operador,
-        unidade_destino=unidade_destino,
-        destino_externo=destino_externo or (unidade_destino.nome if unidade_destino else ''),
-        motivo=(d.get('motivo') or '').strip(),
-        observacoes=(d.get('observacoes') or '').strip() or None,
-        situacao=Encaminhamento.Situacao.PENDENTE,
-        criado_em=agora,
-        atualizado_em=agora,
-    )
-    encaminhamento.save(force_insert=True)
-
-    if unidade_destino is not None:
-        caso.unidade = unidade_destino
-        caso.situacao = Caso.Situacao.ENCAMINHADO
-        caso.atualizado_em = agora
-        caso.save(update_fields=['unidade', 'situacao', 'atualizado_em'])
+    try:
+        encaminhamento = encaminhamentos.criar(
+            caso=caso, operador=operador, destino=destino,
+            destino_externo=(d.get('destino_externo') or '').strip(), dados=d, agora=agora,
+        )
+    except encaminhamentos.EncaminhamentoInvalido as erro:
+        return Response(erro.corpo, status=erro.status)
 
     _registrar_auditoria(
         request,
