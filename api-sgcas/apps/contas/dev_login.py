@@ -15,8 +15,8 @@ falha possível neste sistema:
 3. as views conferem as duas condições de novo a cada requisição.
 
 Uso: abrir http://localhost:3000/api/auth/dev e escolher perfil e unidade. As
-contas criadas têm e-mail `dev-<perfil>@dev.local` e nenhum vínculo com o
-Keycloak.
+contas criadas têm e-mail `dev-<perfil>-<unidade>@dev.local` (uma por perfil
+e unidade) e nenhum vínculo com o Keycloak.
 
 Para remover, quando o login real estiver configurado:
 
@@ -106,7 +106,11 @@ def entrar_como(request):
         unidade = Unidade.ativas.order_by('sigla').first()
 
     agora = timezone.now()
-    email = f'dev-{papel.lower().replace("_", "-")}@dev.local'
+    # Uma conta por perfil E unidade: para testar o que passa de uma unidade à
+    # outra (encaminhamento, histórico) é preciso estar nas duas ao mesmo tempo.
+    # Com uma só conta por perfil, a segunda entrada movia a primeira de unidade.
+    sufixo = unidade.sigla.lower() if unidade else 'sem-unidade'
+    email = f'dev-{papel.lower().replace("_", "-")}-{sufixo}@dev.local'
     operador = Operador.objects.filter(email=email).first() or Operador(
         id=str(uuid.uuid4()), email=email, criado_em=agora,
     )

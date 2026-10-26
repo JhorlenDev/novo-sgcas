@@ -4,7 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from django.test import SimpleTestCase, override_settings
+from django.test import Client, SimpleTestCase, override_settings
 
 from apps.contas.models import Operador
 from testes.base import CenarioBase
@@ -50,14 +50,28 @@ class EntradaDeDesenvolvimento(CenarioBase):
 
     def test_conta_de_teste_nao_tem_vinculo_com_o_keycloak(self):
         self.client.get('/api/auth/dev/login?papel=COORDENADOR', headers={'host': 'localhost'})
-        operador = Operador.objects.get(email='dev-coordenador@dev.local')
+        operador = Operador.objects.get(email='dev-coordenador-cras-c@dev.local')
         self.assertIsNone(operador.keycloak_id)
         self.assertEqual(operador.papel, 'COORDENADOR')
 
     def test_entrar_de_novo_reaproveita_a_conta(self):
         for _ in range(2):
             self.client.get('/api/auth/dev/login?papel=ADMIN', headers={'host': 'localhost'})
-        self.assertEqual(Operador.objects.filter(email='dev-admin@dev.local').count(), 1)
+        self.assertEqual(Operador.objects.filter(email='dev-admin-cras-c@dev.local').count(), 1)
+
+    def test_o_mesmo_perfil_em_duas_unidades_sao_duas_contas(self):
+        # Para testar o que passa de uma unidade à outra (encaminhamento, histórico)
+        # é preciso estar nas duas ao mesmo tempo. Com uma conta por perfil, a
+        # segunda entrada movia a conta da primeira para a outra unidade.
+        cras = Client(headers={'host': 'localhost'})
+        creas = Client(headers={'host': 'localhost'})
+        cras.get(f'/api/auth/dev/login?papel=COORDENADOR&unidade={self.centro.sigla}')
+        creas.get(f'/api/auth/dev/login?papel=COORDENADOR&unidade={self.sul.sigla}')
+
+        self.assertEqual(cras.get('/api/auth/me').json()['unidade']['id'], self.centro.id)
+        self.assertEqual(creas.get('/api/auth/me').json()['unidade']['id'], self.sul.id)
+        self.assertNotEqual(cras.get('/api/auth/me').json()['id'], creas.get('/api/auth/me').json()['id'])
+        self.assertEqual(Operador.objects.filter(email__startswith='dev-coordenador-').count(), 2)
 
     def test_perfil_desconhecido_e_recusado(self):
         resposta = self.client.get('/api/auth/dev/login?papel=SUPERUSER', headers={'host': 'localhost'})
