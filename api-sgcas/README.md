@@ -7,7 +7,7 @@ Este projeto expõe a API consumida pelo `front-sgcas`, integra login via Keyclo
 ## Stack
 
 - Python 3.12
-- Django 5.1
+- Django 5.2 LTS
 - Django REST Framework
 - PostgreSQL
 - Keycloak/Tefé Cidadão

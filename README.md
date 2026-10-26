@@ -8,7 +8,7 @@ Do acolhimento ao acompanhamento: cidadãos, recepção, atendimentos e prontuá
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs)
 ![React](https://img.shields.io/badge/React-19-149ECA?logo=react)
-![Django](https://img.shields.io/badge/Django-5.1-092E20?logo=django)
+![Django](https://img.shields.io/badge/Django-5.2%20LTS-092E20?logo=django)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 
