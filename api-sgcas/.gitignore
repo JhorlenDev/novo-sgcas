@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.sqlite3
+.env
+.env.*
+!.env.example
+.coverage
+htmlcov/
+.pytest_cache/
+armazenamento/
+storage/
+staticfiles/
+pgdata/
+pg.log
+server.log
+server_error.log

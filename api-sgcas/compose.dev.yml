@@ -1,0 +1,6 @@
+# Uso: docker compose -f docker-compose.yml -f compose.dev.yml up -d --wait postgres
+# Expõe o banco apenas na interface de loopback para a API executada no host.
+services:
+  postgres:
+    ports:
+      - '127.0.0.1:${POSTGRES_PORT:-5434}:5432'

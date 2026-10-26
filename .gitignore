@@ -1,0 +1,31 @@
+# Segredos e ambiente local
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# Dependências e saídas de build
+node_modules/
+.venv/
+.next/
+out/
+__pycache__/
+*.py[cod]
+*.tsbuildinfo
+# Logs, testes e arquivos locais
+*.log
+.coverage
+coverage/
+htmlcov/
+.pytest_cache/
+playwright-report/
+test-results/
+.DS_Store
+# Dados persistentes e backups
+*.sqlite3
+*.dump
+*.sql.gz
+armazenamento/
+storage/
+pgdata/
+staticfiles/
