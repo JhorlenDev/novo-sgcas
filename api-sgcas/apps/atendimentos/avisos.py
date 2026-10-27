@@ -39,13 +39,15 @@ def mensagem(aviso: Aviso) -> str:
     if aviso.tipo == Tipo.ENCAMINHADO_ADIANTE:
         return f'{d.get("unidade")} encaminhou {nome} para {d.get("destino")}.'
     if aviso.tipo == Tipo.BENEFICIO_REPETIDO:
+        # Avisos anteriores à janela de um ano não guardam o período: eram todos do mês.
+        periodo = d.get('periodo') or 'neste mês'
         if d.get('pedido'):
             return (
                 f'{d.get("unidade")} atendeu novamente o pedido de {d.get("o_que")} de {nome} '
-                f'neste mês. Justificativa registrada.'
+                f'{periodo}. Justificativa registrada.'
             )
         return (
-            f'{d.get("unidade")} concedeu {d.get("o_que")} novamente a {nome} neste mês. '
+            f'{d.get("unidade")} concedeu {d.get("o_que")} novamente a {nome} {periodo}. '
             f'Justificativa registrada.'
         )
     return aviso.get_tipo_display()

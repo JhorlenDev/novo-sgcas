@@ -31,7 +31,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge, Button, Card, EmptyState, Field, Input, SecondaryButton, Select } from "@/components/ui";
-import { AvisoDeDuplicidade, alertasDoErro, justificativaValida, useDuplicidade } from "@/components/duplicidade/aviso";
+import { AvisoDeDuplicidade, alertasDoErro, justificativaValida, mensagemDeDuplicidade, useDuplicidade } from "@/components/duplicidade/aviso";
 import { api, mensagemDaApi } from "@/lib/api";
 import { formatarDataHora as formatarDataHoraDoEncaminhamento } from "@/lib/encaminhamentos";
 import { formatCPF } from "@/lib/utils";
@@ -244,7 +244,7 @@ export default function RecepcaoPage() {
       if (repetidos) setAlertasDoServidor(repetidos);
       setMensagem(
         repetidos
-          ? "Esta pessoa já recebeu ou pediu este auxílio neste mês. Escreva a justificativa para seguir."
+          ? mensagemDeDuplicidade(repetidos)
           : mensagemDaApi(error, "Não foi possível registrar o atendimento."),
       );
     } finally {

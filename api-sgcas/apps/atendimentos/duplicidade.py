@@ -8,13 +8,19 @@ unidades lerem. Não bloqueia: quem tem uma necessidade nova não pode ficar
 travado por um atendimento antigo, e quem decide é quem atende.
 
 A janela é o mês corrente, no fuso do município: é nele que a repetição costuma
-acontecer, e o aviso que dispara a todo pedido deixa de ser lido.
+acontecer, e o aviso que dispara a todo pedido deixa de ser lido. A exceção é o
+auxílio de nascimento (o auxílio maternidade), que a regra do município limita a
+uma vez por ano: para ele a janela são os últimos 12 meses.
 
 O controle no balcão vale para os serviços ligados à demanda "Benefício
 Eventual". Um serviço que seja um auxílio mas não esteja ligado a essa categoria
-não é controlado — a categoria é cadastrada na tela Institucional.
+não é controlado — a categoria é cadastrada na tela Institucional. Como o
+serviço não diz que tipo de auxílio é, o balcão só enxerga o que é do mês; a
+regra de um ano vale onde o tipo é conhecido: no registro do benefício e na prévia.
 """
 from __future__ import annotations
+
+from datetime import date, datetime, time, timedelta
 
 from rest_framework import status
 from rest_framework.response import Response
@@ -28,11 +34,43 @@ from apps.institucional.models import Servico
 CATEGORIA_DE_BENEFICIO = 'Benefício Eventual'
 MINIMO_DA_JUSTIFICATIVA = 10
 
+# Os auxílios que a regra do município limita a uma vez por ano, e não por mês.
+TIPOS_DE_UMA_VEZ_POR_ANO = frozenset({BeneficioEventual.Tipo.NASCIMENTO.value})
 
-def inicio_do_mes():
+PERIODO_DO_MES = 'neste mês'
+PERIODO_DO_ANO = 'nos últimos 12 meses'
+
+
+def inicio_do_mes(agora=None):
     """O primeiro instante do mês corrente, no fuso local."""
-    agora = timezone.localtime(timezone.now())
+    agora = timezone.localtime(agora or timezone.now())
     return agora.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def _um_ano_antes(dia: date) -> date:
+    try:
+        return dia.replace(year=dia.year - 1)
+    except ValueError:                                  # 29 de fevereiro
+        return dia.replace(year=dia.year - 1, day=28)
+
+
+def inicio_da_janela(tipo: str, agora=None):
+    """
+    Desde quando um benefício deste tipo conta como repetição.
+
+    Para os tipos de uma vez por ano, a janela abre no dia seguinte ao aniversário
+    do benefício: o concedido em 27/10 deixa de contar em 27/10 do ano seguinte —
+    o ano já se completou —, e ainda conta em 26/10.
+    """
+    if tipo not in TIPOS_DE_UMA_VEZ_POR_ANO:
+        return inicio_do_mes(agora)
+    local = timezone.localtime(agora or timezone.now())
+    primeiro_dia = _um_ano_antes(local.date()) + timedelta(days=1)
+    return datetime.combine(primeiro_dia, time.min, tzinfo=local.tzinfo)
+
+
+def periodo_do(tipo: str) -> str:
+    return PERIODO_DO_ANO if tipo in TIPOS_DE_UMA_VEZ_POR_ANO else PERIODO_DO_MES
 
 
 def _normalizar(texto: str | None) -> str:
@@ -45,7 +83,7 @@ def _rotulo_do_beneficio(b: BeneficioEventual) -> str:
     return dict(BeneficioEventual.Tipo.choices).get(b.tipo, b.tipo)
 
 
-def _de_beneficio(b: BeneficioEventual) -> dict:
+def _de_beneficio(b: BeneficioEventual, periodo: str) -> dict:
     return {
         'origem': 'beneficio',
         'quando': b.criado_em.isoformat(),
@@ -53,18 +91,19 @@ def _de_beneficio(b: BeneficioEventual) -> dict:
         'unidade_id': b.unidade_id,
         'o_que': _rotulo_do_beneficio(b),
         'detalhe': b.descricao,
+        'periodo': periodo,
     }
 
 
 def alertas_de_beneficio(cidadao, tipo: str, tipo_outro: str | None = None) -> list[dict]:
     """
-    Benefícios do mesmo tipo concedidos a esta pessoa neste mês, em qualquer
-    unidade. Em "Outros" o que conta é o que foi dado — passagem e urna funerária
+    Benefícios do mesmo tipo concedidos a esta pessoa na janela do tipo (o mês, ou
+    os últimos 12 meses no auxílio de nascimento), em qualquer unidade. Em "Outros" o que conta é o que foi dado — passagem e urna funerária
     não são o mesmo auxílio —, comparado sem diferença de caixa nem de espaços.
     """
     consulta = (
         BeneficioEventual.vigentes
-        .filter(cidadao=cidadao, tipo=tipo, criado_em__gte=inicio_do_mes())
+        .filter(cidadao=cidadao, tipo=tipo, criado_em__gte=inicio_da_janela(tipo))
         .select_related('unidade')
         .order_by('criado_em')
     )
@@ -72,7 +111,7 @@ def alertas_de_beneficio(cidadao, tipo: str, tipo_outro: str | None = None) -> l
     if tipo == BeneficioEventual.Tipo.OUTROS:
         procurado = _normalizar(tipo_outro)
         anteriores = [b for b in anteriores if _normalizar(b.tipo_outro) == procurado]
-    return [_de_beneficio(b) for b in anteriores]
+    return [_de_beneficio(b, periodo_do(tipo)) for b in anteriores]
 
 
 def alertas_para_servico(cidadao, servico, ignorar_caso_id: str | None = None) -> list[dict]:
@@ -91,7 +130,7 @@ def alertas_para_servico(cidadao, servico, ignorar_caso_id: str | None = None) -
 
     inicio = inicio_do_mes()
     alertas = [
-        _de_beneficio(b)
+        _de_beneficio(b, PERIODO_DO_MES)
         for b in (
             BeneficioEventual.vigentes.filter(cidadao=cidadao, criado_em__gte=inicio)
             .select_related('unidade').order_by('criado_em')
@@ -120,6 +159,7 @@ def alertas_para_servico(cidadao, servico, ignorar_caso_id: str | None = None) -
             'unidade_id': v.unidade_id,
             'o_que': f'Atendimento: {v.demanda}',
             'detalhe': 'Encaminhado para a fila',
+            'periodo': PERIODO_DO_MES,
         }
         for v in visitas
     ]
@@ -139,7 +179,7 @@ def exigir_justificativa(alertas: list[dict], justificativa: str | None) -> Resp
     texto = (justificativa or '').strip()
     if not texto:
         return Response({
-            'detalhe': 'Esta pessoa já recebeu ou pediu este auxílio neste mês. '
+            'detalhe': f'Esta pessoa já recebeu ou pediu este auxílio {alertas[0]["periodo"]}. '
                        'Para seguir, escreva a justificativa.',
             'exige_justificativa': True,
             'duplicidade': alertas,
@@ -168,5 +208,9 @@ def avisar_as_outras_unidades(
     for unidade_id in {a['unidade_id'] for a in alertas if a['unidade_id']} - {unidade_propria.id}:
         encaminhamentos.avisar(
             unidade_id, Aviso.Tipo.BENEFICIO_REPETIDO, cidadao_id=cidadao.id,
-            dados={'unidade': unidade_propria.nome, 'o_que': o_que, 'pedido': pedido}, agora=agora,
+            dados={
+                'unidade': unidade_propria.nome, 'o_que': o_que, 'pedido': pedido,
+                'periodo': alertas[0]['periodo'],
+            },
+            agora=agora,
         )

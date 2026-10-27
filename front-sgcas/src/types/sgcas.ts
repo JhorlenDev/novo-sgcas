@@ -220,7 +220,7 @@ export type ResumoDosAvisos = {
   encaminhamentos_pendentes: number;
 };
 
-/** Um auxílio já concedido ou pedido neste mês, em qualquer unidade. */
+/** Um auxílio já concedido ou pedido dentro da janela do tipo, em qualquer unidade. */
 export type AlertaDeDuplicidade = {
   origem: "beneficio" | "atendimento";
   quando: string;
@@ -228,6 +228,8 @@ export type AlertaDeDuplicidade = {
   unidade_id: string | null;
   o_que: string;
   detalhe: string | null;
+  /** A janela que se aplicou: "neste mês" ou, no auxílio de nascimento, "nos últimos 12 meses". */
+  periodo: string;
 };
 
 export type RespostaDeDuplicidade = {

@@ -6,11 +6,11 @@ CREAS e recebe a mesma cesta, porque as unidades não se falavam. Agora o sistem
 avisa — onde, quando e o quê — e só deixa seguir com uma justificativa escrita,
 que fica no histórico para as outras unidades lerem. Não bloqueia: quem tem uma
 necessidade nova não pode ficar travado por um atendimento antigo. A janela é o
-mês corrente.
+mês corrente — e os últimos 12 meses no auxílio de nascimento.
 """
 import threading
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 from unittest import mock
 
 from django.db import connections
@@ -353,6 +353,114 @@ class JanelaDoMes(_Duplicidade):
         self.assertEqual(self.beneficio(self.coordenador).status_code, 409)
         BeneficioEventual.objects.update(criado_em=inicio - timedelta(seconds=1))
         self.assertEqual(self.beneficio(self.coordenador).status_code, 201)
+
+
+NASCIMENTO = 'SITUACAO_NASCIMENTO'
+UM_ANO = 'nos últimos 12 meses'
+
+
+def _manaus(ano, mes, dia, hora=10):
+    return timezone.make_aware(datetime(ano, mes, dia, hora, 0))
+
+
+class JanelaDeUmAno(_Duplicidade):
+    """O auxílio de nascimento é uma vez por ano; os demais, uma vez por mês."""
+
+    def nascimento(self, operador=None, **mudancas):
+        return self.beneficio(operador or self.tecnico, tipo=NASCIMENTO, descricao='Auxílio maternidade', **mudancas)
+
+    def nascimento_ha(self, dias):
+        self.assertEqual(self.nascimento().status_code, 201)
+        BeneficioEventual.objects.update(criado_em=timezone.now() - timedelta(days=dias))
+
+    def test_nascimento_de_meses_atras_ainda_exige_justificativa(self):
+        self.nascimento_ha(150)
+        self.assertEqual(self.nascimento(self.coordenador).status_code, 409)
+
+    def test_nascimento_de_mais_de_um_ano_atras_nao_conta(self):
+        self.nascimento_ha(400)
+        self.assertEqual(self.nascimento(self.coordenador).status_code, 201)
+
+    def test_os_outros_tipos_continuam_com_a_janela_de_um_mes(self):
+        self.cesta_no_centro()
+        BeneficioEventual.objects.update(criado_em=timezone.now() - timedelta(days=100))
+        self.assertEqual(self.beneficio(self.coordenador).status_code, 201)
+
+    def test_vale_entre_unidades_e_com_justificativa_segue(self):
+        self.nascimento_ha(200)
+        self.assertEqual(self.nascimento(self.coordenador, justificativa_duplicidade=JUSTIFICATIVA).status_code, 201)
+        self.assertEqual(self.total(), 2)
+
+    def test_a_mensagem_diz_o_periodo_certo(self):
+        self.nascimento_ha(200)
+        corpo = self.nascimento(self.coordenador).json()
+        self.assertIn(UM_ANO, corpo['detalhe'])
+        self.assertEqual(corpo['duplicidade'][0]['periodo'], UM_ANO)
+
+        BeneficioEventual.objects.all().delete()
+        self.cesta_no_centro()
+        corpo = self.beneficio(self.coordenador).json()
+        self.assertIn('neste mês', corpo['detalhe'])
+        self.assertEqual(corpo['duplicidade'][0]['periodo'], 'neste mês')
+
+    def test_a_previa_usa_a_janela_do_tipo(self):
+        self.nascimento_ha(200)
+        previa = self.como(self.recepcionista).get(f'/api/citizens/{self.cidadao.id}/duplicidade?tipo={NASCIMENTO}').json()
+        self.assertTrue(previa['exige_justificativa'])
+        self.assertEqual(previa['alertas'][0]['periodo'], UM_ANO)
+
+        BeneficioEventual.objects.update(tipo='SITUACAO_VULNERABILIDADE_TEMPORARIA')
+        previa = self.como(self.recepcionista).get(
+            f'/api/citizens/{self.cidadao.id}/duplicidade?tipo=SITUACAO_VULNERABILIDADE_TEMPORARIA').json()
+        self.assertFalse(previa['exige_justificativa'])
+
+    def test_o_aviso_a_outra_unidade_diz_o_periodo(self):
+        self.nascimento_ha(200)
+        self.nascimento(self.coordenador, justificativa_duplicidade=JUSTIFICATIVA)
+        mensagem = [a['mensagem'] for a in self.como(self.tecnico).get('/api/notices/').json()
+                    if a['tipo'] == 'BENEFICIO_REPETIDO'][0]
+        self.assertEqual(
+            mensagem,
+            f'CRAS Sul concedeu Situação de nascimento novamente a {self.cidadao.nome} {UM_ANO}. '
+            f'Justificativa registrada.',
+        )
+
+    def test_aviso_antigo_sem_periodo_continua_dizendo_neste_mes(self):
+        self.cesta_no_centro()
+        self.beneficio(self.coordenador, justificativa_duplicidade=JUSTIFICATIVA)
+        aviso = Aviso.objects.get(tipo=Aviso.Tipo.BENEFICIO_REPETIDO)
+        aviso.dados.pop('periodo', None)
+        aviso.save()
+        mensagem = [a['mensagem'] for a in self.como(self.tecnico).get('/api/notices/').json()
+                    if a['tipo'] == 'BENEFICIO_REPETIDO'][0]
+        self.assertIn('neste mês', mensagem)
+
+    def test_o_pedido_no_balcao_continua_pela_janela_do_mes(self):
+        # O serviço não diz que tipo de auxílio é: no balcão só o que é do mês avisa.
+        self.nascimento_ha(200)
+        self.assertEqual(self.recepcao().status_code, 201)
+
+    def test_o_inicio_da_janela_no_dia_do_aniversario_ja_nao_conta_o_anterior(self):
+        agora = _manaus(2026, 10, 27)
+        inicio = timezone.localtime(duplicidade.inicio_da_janela(NASCIMENTO, agora))
+        self.assertEqual((inicio.year, inicio.month, inicio.day, inicio.hour, inicio.minute), (2025, 10, 28, 0, 0))
+
+    def test_29_de_fevereiro_nao_quebra_a_janela(self):
+        inicio = timezone.localtime(duplicidade.inicio_da_janela(NASCIMENTO, _manaus(2028, 2, 29)))
+        self.assertEqual((inicio.year, inicio.month, inicio.day, inicio.hour), (2027, 3, 1, 0))
+
+    def test_a_janela_dos_outros_tipos_e_a_do_mes(self):
+        agora = _manaus(2026, 10, 27)
+        for tipo in ('SITUACAO_MORTE', 'SITUACAO_CALAMIDADE', 'SITUACAO_VULNERABILIDADE_TEMPORARIA', 'OUTROS'):
+            self.assertEqual(duplicidade.inicio_da_janela(tipo, agora), duplicidade.inicio_do_mes(agora))
+
+    def test_beneficio_do_primeiro_instante_da_janela_conta_e_do_ultimo_antes_dela_nao(self):
+        self.nascimento_ha(1)
+        inicio = duplicidade.inicio_da_janela(NASCIMENTO)
+        BeneficioEventual.objects.update(criado_em=inicio)
+        self.assertEqual(self.nascimento(self.coordenador).status_code, 409)
+        BeneficioEventual.objects.update(criado_em=inicio - timedelta(seconds=1))
+        self.assertEqual(self.nascimento(self.coordenador).status_code, 201)
 
 
 class DuasRegistrosAoMesmoTempo(TransactionTestCase):

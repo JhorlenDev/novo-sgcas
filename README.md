@@ -94,14 +94,14 @@ A regra vale na API (os campos nem são enviados à recepção) e na tela. O tex
 
 ### Mesmo auxílio em várias unidades
 
-Ao registrar um benefício, ou ao encaminhar à fila um pedido de serviço da demanda **Benefício Eventual**, o sistema confere o **mês corrente** (no fuso do município), em todas as unidades:
+Ao registrar um benefício, ou ao encaminhar à fila um pedido de serviço da demanda **Benefício Eventual**, o sistema confere o **mês corrente** (no fuso do município), em todas as unidades. A exceção é o **auxílio de nascimento** (o auxílio maternidade, tipo "Situação de nascimento"), que vale **uma vez a cada 12 meses**: o benefício concedido em 27/10 deixa de contar em 27/10 do ano seguinte. O que é conferido:
 
 - benefício do mesmo tipo já concedido (em "Outros", compara o que foi dado, sem diferença de caixa ou espaços);
 - no balcão, também pedido do mesmo tipo já encaminhado à fila de alguma unidade.
 
 Havendo repetição, a tela mostra **onde, quando e o quê** e só segue com uma **justificativa escrita** (mínimo de 10 caracteres). Não bloqueia: quem tem necessidade nova não fica travado por atendimento antigo. A justificativa fica no histórico municipal, as outras unidades recebem o aviso (sem o texto) e a auditoria não a guarda. Negar o pedido no balcão ("finalizado") nunca exige justificativa, e cumprir um encaminhamento não conta o atendimento que o originou como repetição. A pessoa é travada durante o registro, para dois balcões simultâneos não passarem juntos.
 
-> **Configuração necessária.** O controle do balcão vale para os serviços ligados à demanda **Benefício Eventual** (tela Institucional). Um serviço de auxílio que não esteja ligado a ela não é controlado no balcão (o registro de benefício no prontuário é sempre controlado).
+> **Configuração necessária.** O controle do balcão vale para os serviços ligados à demanda **Benefício Eventual** (tela Institucional). Um serviço de auxílio que não esteja ligado a ela não é controlado no balcão (o registro de benefício no prontuário é sempre controlado). Como o serviço não diz que tipo de auxílio é, o balcão só enxerga o que é do mês: a regra de um ano vale no registro do benefício e na prévia, onde o tipo é conhecido.
 
 ### Rotas
 

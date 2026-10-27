@@ -105,7 +105,7 @@ class NovoBeneficioEventualSerializer(serializers.Serializer):
     tipo = serializers.ChoiceField(choices=BeneficioEventual.Tipo.choices)
     tipo_outro = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     descricao = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    # Exigida quando o mesmo benefício já foi concedido no mês (ver `duplicidade`).
+    # Exigida quando o mesmo benefício já foi concedido na janela do tipo (ver `duplicidade`).
     justificativa_duplicidade = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def validate(self, dados):

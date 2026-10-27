@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CalendarClock, ClipboardList, Gift, Home, Plus, Send, ShieldCheck, Stethoscope, UsersRound } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, SecondaryButton, Select } from "@/components/ui";
-import { AvisoDeDuplicidade, alertasDoErro, justificativaValida, useDuplicidade } from "@/components/duplicidade/aviso";
+import { AvisoDeDuplicidade, alertasDoErro, justificativaValida, mensagemDeDuplicidade, useDuplicidade } from "@/components/duplicidade/aviso";
 import { DetalheDoEncaminhamento } from "@/components/encaminhamentos/detalhe";
 import { destinoDoEncaminhamento } from "@/components/encaminhamentos/ficha";
 import {
@@ -271,7 +271,7 @@ function BeneficiosPanel({ cidadao, beneficios, onSaved }: { cidadao: Cidadao; b
       const duplicadas = alertasDoErro(error);
       if (duplicadas) {
         setAlertasDoServidor(duplicadas);
-        setErro("Esta pessoa já recebeu ou pediu este auxílio neste mês. Escreva a justificativa para seguir.");
+        setErro(mensagemDeDuplicidade(duplicadas));
       } else {
         setErro(mensagemDaApi(error, "Não foi possível registrar o benefício."));
       }

@@ -179,7 +179,7 @@ class BeneficioEventual(models.Model):
         'contas.Operador', models.DO_NOTHING, db_column='registeredById',
         related_name='beneficios_registrados',
     )
-    # Preenchida quando o mesmo benefício já tinha sido concedido no mês e quem
+    # Preenchida quando o mesmo benefício já tinha sido concedido na janela do tipo e quem
     # registrou decidiu seguir assim mesmo: o aviso não bloqueia, mas exige que
     # o porquê fique escrito, onde as outras unidades possam ler.
     justificativa_duplicidade = models.TextField(db_column='duplicateJustification', blank=True, null=True)
@@ -332,7 +332,7 @@ class AtendimentoDeRecepcao(models.Model):
     # para a próxima unidade que atender esta pessoa.
     motivo = models.TextField(db_column='reason', blank=True, null=True)
 
-    # Preenchida quando o pedido repetia um benefício já concedido no mês e a
+    # Preenchida quando o pedido repetia um benefício já concedido no mês (ou pedido) e a
     # recepção decidiu atender assim mesmo (ver `apps.atendimentos.duplicidade`).
     justificativa_duplicidade = models.TextField(db_column='duplicateJustification', blank=True, null=True)
 

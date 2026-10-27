@@ -14,7 +14,7 @@ import type { AlertaDeDuplicidade, RespostaDeDuplicidade } from "@/types/sgcas";
  */
 
 /**
- * Pergunta à API, antes de enviar, se o que está sendo pedido repete algo do mês.
+ * Pergunta à API, antes de enviar, se o que está sendo pedido repete algo da janela do tipo.
  * `consulta` é a query (`servico_id=…` ou `tipo=…`); `null` quando ainda não há o
  * que perguntar. O resultado só vale para a consulta que o originou: trocar de
  * serviço não deve mostrar, nem por um instante, o aviso do anterior.
@@ -45,6 +45,16 @@ export function alertasDoErro(error: unknown): AlertaDeDuplicidade[] | null {
   return corpo?.exige_justificativa && Array.isArray(corpo.duplicidade) ? corpo.duplicidade : null;
 }
 
+/** "neste mês" ou "nos últimos 12 meses": a janela que a API aplicou ao que está sendo pedido. */
+export function periodoDosAlertas(alertas: AlertaDeDuplicidade[]): string {
+  return alertas[0]?.periodo ?? "neste mês";
+}
+
+/** A frase que explica por que o registro não seguiu sem a justificativa. */
+export function mensagemDeDuplicidade(alertas: AlertaDeDuplicidade[]): string {
+  return `Esta pessoa já recebeu ou pediu este auxílio ${periodoDosAlertas(alertas)}. Escreva a justificativa para seguir.`;
+}
+
 export function justificativaValida(texto: string): boolean {
   return texto.trim().length >= MINIMO_DA_JUSTIFICATIVA;
 }
@@ -65,7 +75,7 @@ export function AvisoDeDuplicidade({
     <div role="alert" className="grid gap-3 rounded-feature border border-amber-300 bg-amber-50 p-4 text-amber-950">
       <div className="flex items-center gap-2">
         <AlertTriangle size={18} aria-hidden="true" />
-        <strong>Esta pessoa já recebeu ou pediu este auxílio neste mês</strong>
+        <strong>Esta pessoa já recebeu ou pediu este auxílio {periodoDosAlertas(alertas)}</strong>
       </div>
       <ul className="grid gap-1 text-sm leading-6">
         {alertas.map((alerta, indice) => (
