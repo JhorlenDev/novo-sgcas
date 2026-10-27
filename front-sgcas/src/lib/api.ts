@@ -26,6 +26,23 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * O texto de um erro da API para mostrar ao usuário: o `detalhe` quando há, senão a
+ * primeira mensagem de campo (`{ campo: "mensagem" }` ou `{ campo: ["mensagem"] }`).
+ */
+export function mensagemDaApi(error: unknown, padrao: string): string {
+  if (!(error instanceof ApiError)) return padrao;
+  if (error.data && typeof error.data === "object") {
+    const corpo = error.data as Record<string, unknown>;
+    if (typeof corpo.detalhe === "string" && corpo.detalhe) return corpo.detalhe;
+    for (const valor of Object.values(corpo)) {
+      const texto = Array.isArray(valor) ? valor[0] : valor;
+      if (typeof texto === "string" && texto) return texto;
+    }
+  }
+  return error.message && !/^Erro \d+$/.test(error.message) ? error.message : padrao;
+}
+
 export function clearLogoutMarker() {
   window.localStorage.removeItem(logoutMarker);
 }

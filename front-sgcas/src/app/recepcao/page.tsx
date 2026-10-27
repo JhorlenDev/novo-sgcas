@@ -31,9 +31,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge, Button, Card, EmptyState, Field, Input, SecondaryButton, Select } from "@/components/ui";
-import { api } from "@/lib/api";
+import { AvisoDeDuplicidade, alertasDoErro, justificativaValida, useDuplicidade } from "@/components/duplicidade/aviso";
+import { api, mensagemDaApi } from "@/lib/api";
+import { formatarDataHora as formatarDataHoraDoEncaminhamento } from "@/lib/encaminhamentos";
 import { formatCPF } from "@/lib/utils";
-import type { AtendimentoRecepcao, Caso, CidadaoLista, EntradaHistorico, PainelRecepcao, Senha, Servico } from "@/types/sgcas";
+import type {
+  AlertaDeDuplicidade, AtendimentoRecepcao, Caso, CidadaoLista, EncaminhamentoResumo, EntradaHistorico,
+  PainelRecepcao, Senha, Servico,
+} from "@/types/sgcas";
 
 type HistoricoResponse = {
   cidadao: CidadaoLista;
@@ -44,6 +49,8 @@ type ResultadoAtendimento = {
   desfecho: "ENCAMINHADO" | "FINALIZADO";
   caso: Caso | null;
   senha: { senha: string; servico?: string | null } | null;
+  // Presente quando a visita cumpriu um encaminhamento de outra unidade.
+  encaminhamento: EncaminhamentoResumo | null;
 };
 
 type AcaoAtendimento = "FINALIZADO" | "ENCAMINHADO";
@@ -71,6 +78,12 @@ export default function RecepcaoPage() {
   const [acao, setAcao] = useState<AcaoAtendimento>("ENCAMINHADO");
   const [successOpen, setSuccessOpen] = useState(false);
   const [resultado, setResultado] = useState<ResultadoAtendimento | null>(null);
+  // Encaminhamentos de outras unidades para esta, ainda sem a chegada registrada.
+  const [pendentes, setPendentes] = useState<EncaminhamentoResumo[]>([]);
+  // `null`: o atendente não mexeu — vale o primeiro vinculável (o mais urgente).
+  const [encaminhamentoEscolhido, setEncaminhamentoEscolhido] = useState<string | null>(null);
+  const [justificativa, setJustificativa] = useState("");
+  const [alertasDoServidor, setAlertasDoServidor] = useState<AlertaDeDuplicidade[]>([]);
 
   useEffect(() => {
     void api<Servico[]>("/institutional/services?unidade=todas").then(setServicos).catch(() => setServicos([]));
@@ -121,25 +134,48 @@ export default function RecepcaoPage() {
     setPrioridade("NORMAL");
     setObservacao("");
     setMotivo("");
+    setEncaminhamentoEscolhido(null);
+    setJustificativa("");
+    setAlertasDoServidor([]);
 
     await carregarDadosDoCidadao(selecionado);
     setAvisoOpen(true);
   }
 
   async function carregarDadosDoCidadao(selecionado: CidadaoLista) {
-    const [historicoData, casosData] = await Promise.all([
+    const [historicoData, casosData, recebidos] = await Promise.all([
       api<HistoricoResponse>(`/citizens/${selecionado.id}/historico`).catch(() => ({ cidadao: selecionado, entradas: [] })),
       api<Caso[]>(`/cases/?cidadao=${selecionado.id}`).catch(() => []),
+      api<EncaminhamentoResumo[]>(`/referrals/recebidos?cidadao=${selecionado.id}`).catch(() => []),
     ]);
 
     setHistorico(historicoData.entradas);
     setCasos(casosData);
+    // Só os que ainda esperam a pessoa: o que já teve a chegada registrada não se cumpre de novo.
+    setPendentes(recebidos.filter((e) => !e.chegou_em));
   }
 
   const servicoSelecionado = useMemo(
     () => servicos.find((servico) => servico.id === servicoId) ?? null,
     [servicoId, servicos],
   );
+
+  // A chegada só cumpre um encaminhamento para o serviço da unidade a que ele se destina.
+  const vinculaveis = useMemo(
+    () => pendentes.filter((e) => servicoSelecionado && e.unidade_destino === servicoSelecionado.unidade),
+    [pendentes, servicoSelecionado],
+  );
+  const encaminhamentoDaVisita = acao === "ENCAMINHADO"
+    ? (encaminhamentoEscolhido === null ? vinculaveis[0]?.id ?? "" : encaminhamentoEscolhido)
+    : "";
+
+  // O aviso de repetição aparece assim que o serviço é escolhido, antes de enviar.
+  const consultaDeDuplicidade = acao === "ENCAMINHADO" && servicoSelecionado
+    ? `servico_id=${servicoSelecionado.id}${encaminhamentoDaVisita ? `&encaminhamento_id=${encaminhamentoDaVisita}` : ""}`
+    : null;
+  const daPrevia = useDuplicidade(cidadao?.id ?? null, consultaDeDuplicidade);
+  const alertasDeDuplicidade = acao === "ENCAMINHADO" ? (daPrevia.length > 0 ? daPrevia : alertasDoServidor) : [];
+  const faltaJustificar = alertasDeDuplicidade.length > 0 && !justificativaValida(justificativa);
 
   const casosParecidos = useMemo(() => {
     if (!servicoSelecionado) return casos.filter((caso) => caso.situacao !== "CONCLUIDO");
@@ -162,6 +198,10 @@ export default function RecepcaoPage() {
 
   async function registrar(desfecho: AcaoAtendimento) {
     if (!cidadao || !servicoSelecionado) return;
+    if (desfecho === "ENCAMINHADO" && faltaJustificar) {
+      setMensagem("Escreva a justificativa para repetir este auxílio.");
+      return;
+    }
 
     setRegistrando(true);
     setMensagem("");
@@ -180,6 +220,8 @@ export default function RecepcaoPage() {
           prioridade,
           motivo: motivoLimpo || (desfecho === "FINALIZADO" ? "Atendimento encerrado na recepção após verificação de caso/histórico existente." : ""),
           observacao: observacaoLimpa || `Solicitação registrada pela recepção: ${servicoSelecionado.nome}.`,
+          encaminhamento_id: desfecho === "ENCAMINHADO" && encaminhamentoDaVisita ? encaminhamentoDaVisita : null,
+          justificativa_duplicidade: desfecho === "ENCAMINHADO" && alertasDeDuplicidade.length > 0 ? justificativa.trim() : null,
         }),
       });
 
@@ -190,12 +232,21 @@ export default function RecepcaoPage() {
       setPrioridade("NORMAL");
       setObservacao("");
       setMotivo("");
+      setEncaminhamentoEscolhido(null);
+      setJustificativa("");
+      setAlertasDoServidor([]);
       await carregarUltimosAtendimentos();
       await carregarPainel();
       await carregarFila();
       await carregarDadosDoCidadao(cidadao);
     } catch (error) {
-      setMensagem(error instanceof Error ? error.message : "Não foi possível registrar o atendimento.");
+      const repetidos = alertasDoErro(error);
+      if (repetidos) setAlertasDoServidor(repetidos);
+      setMensagem(
+        repetidos
+          ? "Esta pessoa já recebeu ou pediu este auxílio neste mês. Escreva a justificativa para seguir."
+          : mensagemDaApi(error, "Não foi possível registrar o atendimento."),
+      );
     } finally {
       setRegistrando(false);
     }
@@ -299,9 +350,12 @@ export default function RecepcaoPage() {
 
             {cidadao && (
               <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
-                <Card className="min-w-0">
-                  <PainelDoCidadao casos={casos} historico={historico} />
-                </Card>
+                <div className="grid min-w-0 gap-5">
+                  {pendentes.length > 0 && <EncaminhamentosAguardando encaminhamentos={pendentes} nome={cidadao.nome} />}
+                  <Card className="min-w-0">
+                    <PainelDoCidadao casos={casos} historico={historico} />
+                  </Card>
+                </div>
 
                 <Card className="h-fit !p-4">
                   <div className="mb-3">
@@ -389,7 +443,26 @@ export default function RecepcaoPage() {
               </Field>
             )}
 
-            {servicoSelecionado && casosParecidos.length > 0 && (
+            {acao === "ENCAMINHADO" && vinculaveis.length > 0 && (
+              <Field label="Esta pessoa chegou encaminhada de outra unidade?">
+                <Select
+                  value={encaminhamentoDaVisita}
+                  onChange={(event) => {
+                    setEncaminhamentoEscolhido(event.target.value);
+                    setAlertasDoServidor([]);
+                  }}
+                >
+                  {vinculaveis.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      Sim, de {e.unidade_origem_nome || "outra unidade"} · {e.categoria_rotulo} · urgência {e.urgencia_rotulo.toLowerCase()} ({formatarDataHoraDoEncaminhamento(e.criado_em)})
+                    </option>
+                  ))}
+                  <option value="">Não, é um pedido novo</option>
+                </Select>
+              </Field>
+            )}
+
+            {servicoSelecionado && casosParecidos.length > 0 && alertasDeDuplicidade.length === 0 && (
               <div className="rounded-feature border border-amber-200 bg-amber-50 p-4 text-amber-950">
                 <div className="row">
                   <AlertTriangle size={18} />
@@ -399,6 +472,10 @@ export default function RecepcaoPage() {
                   Há caso ou atendimento recente. Se for a mesma demanda, finalize na recepção.
                 </p>
               </div>
+            )}
+
+            {acao === "ENCAMINHADO" && (
+              <AvisoDeDuplicidade alertas={alertasDeDuplicidade} justificativa={justificativa} onChange={setJustificativa} />
             )}
 
             <Field label={acao === "ENCAMINHADO" ? "Observação para o atendimento" : "Observação"}>
@@ -428,7 +505,7 @@ export default function RecepcaoPage() {
             <SecondaryButton type="button" onClick={() => setAcaoOpen(false)} disabled={registrando}>
               Cancelar
             </SecondaryButton>
-            <Button type="button" disabled={!servicoSelecionado || registrando} onClick={() => void registrar(acao)}>
+            <Button type="button" disabled={!servicoSelecionado || registrando || (acao === "ENCAMINHADO" && faltaJustificar)} onClick={() => void registrar(acao)}>
               {acao === "ENCAMINHADO" ? (
                 <>
                   <Send size={18} />
@@ -467,6 +544,9 @@ export default function RecepcaoPage() {
               {resultado?.senha
                 ? `Senha gerada: ${resultado.senha.senha}. O cidadão já aparece na fila da unidade.`
                 : "O atendimento foi registrado no histórico do cidadão."}
+              {resultado?.encaminhamento
+                ? ` A chegada cumpriu o encaminhamento de ${resultado.encaminhamento.unidade_origem_nome ?? "outra unidade"}, que foi avisada.`
+                : ""}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -580,6 +660,34 @@ function MiniStat({
       </div>
       <p className="text-sm font-semibold leading-5 text-meta-slate">{title}</p>
       <span className="sr-only">{detail}</span>
+    </div>
+  );
+}
+
+/**
+ * A pessoa foi encaminhada para esta unidade e ainda não chegou ao balcão. A
+ * recepção vê só o resumo — de onde, quando, a categoria e a urgência; o relato
+ * é da equipe técnica.
+ */
+function EncaminhamentosAguardando({ encaminhamentos, nome }: { encaminhamentos: EncaminhamentoResumo[]; nome: string }) {
+  return (
+    <div role="status" className="rounded-feature border border-primary/30 bg-primary/5 p-4">
+      <div className="flex items-center gap-2 text-meta-charcoal">
+        <ArrowLeftRight size={18} aria-hidden="true" />
+        <strong>{nome} foi encaminhado(a) para esta unidade</strong>
+      </div>
+      <ul className="mt-2 grid gap-1 text-sm leading-6 text-meta-charcoal">
+        {encaminhamentos.map((e) => (
+          <li key={e.id}>
+            De <strong>{e.unidade_origem_nome || "outra unidade"}</strong> em {formatarDataHoraDoEncaminhamento(e.criado_em)} ·{" "}
+            {e.categoria_rotulo} · urgência {e.urgencia_rotulo.toLowerCase()}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-xs leading-5 text-meta-slate">
+        Ao iniciar o atendimento, vincule a visita ao encaminhamento: a ficha e a urgência seguem com a pessoa e a unidade
+        de origem é avisada da chegada.
+      </p>
     </div>
   );
 }

@@ -6,9 +6,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CalendarClock, ClipboardList, Gift, Home, Plus, Send, ShieldCheck, Stethoscope, UsersRound } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, SecondaryButton, Select } from "@/components/ui";
-import { api } from "@/lib/api";
+import { AvisoDeDuplicidade, alertasDoErro, justificativaValida, useDuplicidade } from "@/components/duplicidade/aviso";
+import { DetalheDoEncaminhamento } from "@/components/encaminhamentos/detalhe";
+import { destinoDoEncaminhamento } from "@/components/encaminhamentos/ficha";
+import {
+  CamposDeEncaminhamento, FORMULARIO_VAZIO, corpoDoEncaminhamento, validarEncaminhamento,
+  type FormularioDeEncaminhamento,
+} from "@/components/encaminhamentos/formulario";
+import { api, mensagemDaApi } from "@/lib/api";
+import { rotuloDaSituacao } from "@/lib/encaminhamentos";
 import { AnexosPanel } from "./anexos-panel";
-import type { AtendimentoRecepcao, BeneficioEventual, Caso, Cidadao, Encaminhamento, EntradaHistorico, ProntuarioCidadao, Senha, Unidade } from "@/types/sgcas";
+import type { AlertaDeDuplicidade, AtendimentoRecepcao, BeneficioEventual, Caso, Cidadao, Encaminhamento, EntradaHistorico, ProntuarioCidadao, Senha, Unidade } from "@/types/sgcas";
 
 export default function ProntuarioPage() {
   const params = useParams<{ id: string }>();
@@ -223,26 +231,50 @@ function BeneficiosPanel({ cidadao, beneficios, onSaved }: { cidadao: Cidadao; b
   const [aberto, setAberto] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
-  const [form, setForm] = useState({
-    nome_da_pessoa: cidadao.nome,
-    tipo: "SITUACAO_VULNERABILIDADE_TEMPORARIA",
-    tipo_outro: "",
-    descricao: "",
-  });
+  const [justificativa, setJustificativa] = useState("");
+  const [alertasDoServidor, setAlertasDoServidor] = useState<AlertaDeDuplicidade[]>([]);
+  const formInicial = { nome_da_pessoa: cidadao.nome, tipo: "SITUACAO_VULNERABILIDADE_TEMPORARIA", tipo_outro: "", descricao: "" };
+  const [form, setForm] = useState(formInicial);
+
+  // O aviso aparece assim que o tipo é escolhido, não só ao tentar salvar.
+  const outro = form.tipo_outro.trim();
+  const consulta = !aberto ? null : form.tipo === "OUTROS"
+    ? (outro ? `tipo=OUTROS&tipo_outro=${encodeURIComponent(outro)}` : null)
+    : `tipo=${form.tipo}`;
+  const daPrevia = useDuplicidade(cidadao.id, consulta);
+  const alertas = daPrevia.length > 0 ? daPrevia : alertasDoServidor;
+
+  function mudar(parcial: Partial<typeof formInicial>) {
+    setForm((old) => ({ ...old, ...parcial }));
+    // Os avisos do servidor valem para o tipo que foi enviado; outro tipo, outra pergunta.
+    if ("tipo" in parcial || "tipo_outro" in parcial) setAlertasDoServidor([]);
+  }
 
   async function salvar() {
     setErro("");
+    if (alertas.length > 0 && !justificativaValida(justificativa)) {
+      setErro("Escreva a justificativa para repetir este auxílio.");
+      return;
+    }
     setSalvando(true);
     try {
       await api<BeneficioEventual>(`/citizens/${cidadao.id}/beneficios`, {
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, justificativa_duplicidade: alertas.length > 0 ? justificativa.trim() : null }),
       });
-      setForm({ nome_da_pessoa: cidadao.nome, tipo: "SITUACAO_VULNERABILIDADE_TEMPORARIA", tipo_outro: "", descricao: "" });
+      setForm(formInicial);
+      setJustificativa("");
+      setAlertasDoServidor([]);
       setAberto(false);
       await onSaved();
     } catch (error) {
-      setErro(error instanceof Error ? error.message : "Não foi possível registrar o benefício.");
+      const duplicadas = alertasDoErro(error);
+      if (duplicadas) {
+        setAlertasDoServidor(duplicadas);
+        setErro("Esta pessoa já recebeu ou pediu este auxílio neste mês. Escreva a justificativa para seguir.");
+      } else {
+        setErro(mensagemDaApi(error, "Não foi possível registrar o benefício."));
+      }
     } finally {
       setSalvando(false);
     }
@@ -261,10 +293,10 @@ function BeneficiosPanel({ cidadao, beneficios, onSaved }: { cidadao: Cidadao; b
         <div className="mb-4 rounded-card border border-primary/15 bg-primary/5 p-3">
           <div className="grid gap-3 md:grid-cols-2">
             <Field label="Pessoa beneficiada">
-              <Input value={form.nome_da_pessoa} onChange={(event) => setForm((old) => ({ ...old, nome_da_pessoa: event.target.value }))} />
+              <Input value={form.nome_da_pessoa} onChange={(event) => mudar({ nome_da_pessoa: event.target.value })} />
             </Field>
             <Field label="Tipo">
-              <Select value={form.tipo} onChange={(event) => setForm((old) => ({ ...old, tipo: event.target.value }))}>
+              <Select value={form.tipo} onChange={(event) => mudar({ tipo: event.target.value })}>
                 <option value="SITUACAO_VULNERABILIDADE_TEMPORARIA">Vulnerabilidade temporária</option>
                 <option value="SITUACAO_NASCIMENTO">Situação de nascimento</option>
                 <option value="SITUACAO_MORTE">Situação de morte</option>
@@ -276,16 +308,19 @@ function BeneficiosPanel({ cidadao, beneficios, onSaved }: { cidadao: Cidadao; b
           {form.tipo === "OUTROS" && (
             <div className="mt-3">
               <Field label="Qual tipo?">
-                <Input value={form.tipo_outro} onChange={(event) => setForm((old) => ({ ...old, tipo_outro: event.target.value }))} placeholder="Ex.: passagem, documentação..." />
+                <Input value={form.tipo_outro} onChange={(event) => mudar({ tipo_outro: event.target.value })} placeholder="Ex.: passagem, documentação..." />
               </Field>
             </div>
           )}
           <div className="mt-3">
-            <Field label="Descrição / justificativa">
-              <textarea className="input min-h-24" value={form.descricao} onChange={(event) => setForm((old) => ({ ...old, descricao: event.target.value }))} placeholder="O que foi concedido, motivo e orientação dada." />
+            <Field label="Descrição">
+              <textarea className="input min-h-24" value={form.descricao} onChange={(event) => mudar({ descricao: event.target.value })} placeholder="O que foi concedido, motivo e orientação dada." />
             </Field>
           </div>
-          {erro && <p className="mt-2 text-xs font-semibold text-danger">{erro}</p>}
+          <div className="mt-3">
+            <AvisoDeDuplicidade alertas={alertas} justificativa={justificativa} onChange={setJustificativa} />
+          </div>
+          {erro && <p role="alert" className="mt-2 text-xs font-semibold text-danger">{erro}</p>}
           <div className="mt-3 flex justify-end gap-2">
             <SecondaryButton type="button" className="h-9 px-3 text-xs" onClick={() => setAberto(false)}>Cancelar</SecondaryButton>
             <Button type="button" className="h-9 px-3 text-xs" disabled={salvando} onClick={salvar}>{salvando ? "Salvando..." : "Salvar benefício"}</Button>
@@ -293,7 +328,7 @@ function BeneficiosPanel({ cidadao, beneficios, onSaved }: { cidadao: Cidadao; b
         </div>
       )}
 
-      <ListaOuVazio itens={beneficios.map((b) => ({ id: b.id, title: `${b.tipo_outro || b.tipo_rotulo || b.tipo} · ${b.nome_da_pessoa}`, detail: `${b.unidade_nome || "Sem unidade"} · ${formatarDataHora(b.criado_em)}${b.descricao ? ` · ${b.descricao}` : ""}` }))} vazio="Benefícios concedidos ou registrados aparecem aqui." />
+      <ListaOuVazio itens={beneficios.map((b) => ({ id: b.id, title: `${b.tipo_outro || b.tipo_rotulo || b.tipo} · ${b.nome_da_pessoa}`, detail: `${b.unidade_nome || "Sem unidade"} · ${formatarDataHora(b.criado_em)}${b.descricao ? ` · ${b.descricao}` : ""}${b.justificativa_duplicidade ? ` · Justificativa para repetir: ${b.justificativa_duplicidade}` : ""}` }))} vazio="Benefícios concedidos ou registrados aparecem aqui." />
     </Card>
   );
 }
@@ -302,27 +337,31 @@ function EncaminhamentosPanel({ cidadao, casos, encaminhamentos, unidades, onSav
   const [aberto, setAberto] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
-  const [form, setForm] = useState({
-    caso_id: "",
-    unidade_destino_id: "",
-    destino_externo: "",
-    motivo: "",
-    observacoes: "",
-  });
+  const [casoId, setCasoId] = useState("");
+  const [form, setForm] = useState<FormularioDeEncaminhamento>(FORMULARIO_VAZIO);
+  // Os erros só aparecem depois da primeira tentativa de salvar e acompanham o que está digitado.
+  const [tentou, setTentou] = useState(false);
+  const erros = tentou ? validarEncaminhamento(form) : {};
+  const [fichaAberta, setFichaAberta] = useState<string | null>(null);
 
   async function salvar() {
     setErro("");
+    setTentou(true);
+    if (Object.keys(validarEncaminhamento(form)).length > 0) return;
+
     setSalvando(true);
     try {
       await api<Encaminhamento>(`/citizens/${cidadao.id}/encaminhamentos`, {
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...corpoDoEncaminhamento(form), caso_id: casoId || null }),
       });
-      setForm({ caso_id: "", unidade_destino_id: "", destino_externo: "", motivo: "", observacoes: "" });
+      setForm(FORMULARIO_VAZIO);
+      setTentou(false);
+      setCasoId("");
       setAberto(false);
       await onSaved();
     } catch (error) {
-      setErro(error instanceof Error ? error.message : "Não foi possível registrar o encaminhamento.");
+      setErro(mensagemDaApi(error, "Não foi possível registrar o encaminhamento."));
     } finally {
       setSalvando(false);
     }
@@ -339,34 +378,16 @@ function EncaminhamentosPanel({ cidadao, casos, encaminhamentos, unidades, onSav
 
       {aberto && (
         <div className="mb-4 rounded-card border border-primary/15 bg-primary/5 p-3">
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="mb-4">
             <Field label="Vincular a caso">
-              <Select value={form.caso_id} onChange={(event) => setForm((old) => ({ ...old, caso_id: event.target.value }))}>
+              <Select value={casoId} onChange={(event) => setCasoId(event.target.value)}>
                 <option value="">Criar caso de encaminhamento</option>
                 {casos.map((caso) => <option key={caso.id} value={caso.id}>{caso.protocolo} · {rotuloSituacao(caso.situacao)}</option>)}
               </Select>
             </Field>
-            <Field label="Unidade da rede">
-              <Select value={form.unidade_destino_id} onChange={(event) => setForm((old) => ({ ...old, unidade_destino_id: event.target.value, destino_externo: event.target.value ? "" : old.destino_externo }))}>
-                <option value="">Destino externo</option>
-                {unidades.map((unidade) => <option key={unidade.id} value={unidade.id}>{unidade.nome_qualificado || unidade.nome}</option>)}
-              </Select>
-            </Field>
           </div>
-          <div className="mt-3">
-            <Field label="Destino externo">
-              <Input value={form.destino_externo} disabled={Boolean(form.unidade_destino_id)} onChange={(event) => setForm((old) => ({ ...old, destino_externo: event.target.value }))} placeholder="Ex.: Conselho Tutelar, UBS, Defensoria..." />
-            </Field>
-          </div>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <Field label="Motivo">
-              <textarea className="input min-h-24" value={form.motivo} onChange={(event) => setForm((old) => ({ ...old, motivo: event.target.value }))} placeholder="Por que o cidadão está sendo encaminhado?" />
-            </Field>
-            <Field label="Observações">
-              <textarea className="input min-h-24" value={form.observacoes} onChange={(event) => setForm((old) => ({ ...old, observacoes: event.target.value }))} placeholder="Documentos, combinados e orientações." />
-            </Field>
-          </div>
-          {erro && <p className="mt-2 text-xs font-semibold text-danger">{erro}</p>}
+          <CamposDeEncaminhamento valor={form} onChange={setForm} unidades={unidades} erros={erros} />
+          {erro && <p role="alert" className="mt-2 text-xs font-semibold text-danger">{erro}</p>}
           <div className="mt-3 flex justify-end gap-2">
             <SecondaryButton type="button" className="h-9 px-3 text-xs" onClick={() => setAberto(false)}>Cancelar</SecondaryButton>
             <Button type="button" className="h-9 px-3 text-xs" disabled={salvando} onClick={salvar}>{salvando ? "Salvando..." : "Salvar encaminhamento"}</Button>
@@ -374,7 +395,31 @@ function EncaminhamentosPanel({ cidadao, casos, encaminhamentos, unidades, onSav
         </div>
       )}
 
-      <ListaOuVazio itens={encaminhamentos.map((e) => ({ id: e.id, title: `${e.unidade_destino_nome || e.destino_externo} · ${rotuloSituacaoEncaminhamento(e.situacao)}`, detail: `${formatarDataHora(e.criado_em)} · ${e.motivo}${e.observacoes ? ` · ${e.observacoes}` : ""}` }))} vazio="Encaminhamentos internos ou externos aparecem aqui." />
+      {encaminhamentos.length === 0 ? (
+        <EmptyState title="Sem registros" text="Encaminhamentos internos ou externos aparecem aqui." />
+      ) : (
+        <div className="grid gap-2">
+          {encaminhamentos.map((e) => (
+            <button
+              type="button"
+              key={e.id}
+              onClick={() => setFichaAberta(e.id)}
+              className="rounded-card border border-meta-divider bg-meta-warm-gray p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+              aria-label={`Abrir a ficha do encaminhamento para ${destinoDoEncaminhamento(e)}`}
+            >
+              <strong className="block text-sm text-meta-charcoal">
+                {(e.unidade_origem_nome || "Origem")} → {destinoDoEncaminhamento(e)} · {rotuloDaSituacao(e.situacao)}
+              </strong>
+              <p className="mt-1 text-xs leading-5 text-meta-slate">
+                {formatarDataHora(e.criado_em)} · {e.categoria_rotulo} · Urgência {e.urgencia_rotulo.toLowerCase()}
+                {e.motivo ? ` · ${e.motivo}` : ""}
+              </p>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <DetalheDoEncaminhamento id={fichaAberta} onClose={() => setFichaAberta(null)} onMudou={() => void onSaved()} />
     </Card>
   );
 }
@@ -463,5 +508,4 @@ function rotuloDesfecho(value: string) { return value === "FINALIZADO" ? "Finali
 function rotuloPrioridade(value: string) { return ({ BAIXA: "Baixa", NORMAL: "Normal", ALTA: "Alta", URGENTE: "Urgente" } as Record<string, string>)[value] ?? value; }
 function rotuloSituacaoFila(value: string) { return ({ AGUARDANDO: "Aguardando", CHAMADO: "Chamado", EM_ATENDIMENTO: "Em atendimento", ATENDIDO: "Atendido", DESISTIU: "Não compareceu" } as Record<string, string>)[value] ?? value; }
 function rotuloSituacao(value: string) { return ({ EM_TRIAGEM: "Em triagem", EM_ATENDIMENTO: "Em atendimento", CONCLUIDO: "Concluído", ENCAMINHADO: "Encaminhado", CANCELADO: "Cancelado" } as Record<string, string>)[value] ?? value; }
-function rotuloSituacaoEncaminhamento(value: string) { return ({ PENDENTE: "Pendente", ACEITO: "Aceito", RECUSADO: "Recusado", CONCLUIDO: "Concluído" } as Record<string, string>)[value] ?? value; }
 function tomDoCaso(value: string): "neutral" | "good" | "warn" | "bad" { if (value === "CONCLUIDO") return "good"; if (value === "CANCELADO") return "neutral"; if (value === "EM_ATENDIMENTO") return "warn"; return "bad"; }

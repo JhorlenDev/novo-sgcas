@@ -242,14 +242,11 @@ export default function CasosPage() {
                       <h3>Registrar finalização</h3>
                       <p className="mt-1 text-sm leading-6 text-meta-slate">
                         Use quando o atendimento técnico terminar. O relato substitui a observação inicial do caso.
+                        Para enviar a pessoa a outra unidade ou serviço, use Encaminhar na tela de Atendimento:
+                        é lá que se preenche a ficha que a outra unidade vai ler.
                       </p>
                     </div>
-                    <Field label="Situação final">
-                      <Select name="situacao" defaultValue="CONCLUIDO">
-                        <option value="CONCLUIDO">Concluído</option>
-                        <option value="ENCAMINHADO">Encaminhado</option>
-                      </Select>
-                    </Field>
+                    <input type="hidden" name="situacao" value="CONCLUIDO" />
                     <Field label="Relato do atendimento">
                       <textarea
                         className="input"

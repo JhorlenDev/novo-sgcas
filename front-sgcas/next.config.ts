@@ -43,6 +43,7 @@ const nextConfig: NextConfig = {
         "institutional/units",
         "institutional/services",
         "itinerant-actions",
+        "notices",
         "queues",
         "users",
       ].map((path) => ({

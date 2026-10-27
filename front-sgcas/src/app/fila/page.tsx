@@ -22,9 +22,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, SecondaryButton, Select } from "@/components/ui";
-import { ApiError, api } from "@/lib/api";
+import { DetalheDoEncaminhamento } from "@/components/encaminhamentos/detalhe";
+import { CabecalhoDoEncaminhamento, FichaCompleta } from "@/components/encaminhamentos/ficha";
+import {
+  CamposDeEncaminhamento, FORMULARIO_VAZIO, corpoDoEncaminhamento, validarEncaminhamento,
+  type FormularioDeEncaminhamento,
+} from "@/components/encaminhamentos/formulario";
+import { ApiError, api, mensagemDaApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import type { Cidadao, EntradaHistorico, Caso, PainelAtendente, Senha, Unidade } from "@/types/sgcas";
+import type { Cidadao, EncaminhamentoDetalhe, EntradaHistorico, Caso, PainelAtendente, Senha, Unidade } from "@/types/sgcas";
 
 const indicadores = {
   atendidos_hoje: { titulo: "Atendidos hoje", descricao: "Senhas finalizadas por você hoje nesta unidade." },
@@ -41,6 +47,8 @@ type AtendimentoMontado = {
   senha: Senha;
   cidadao: Cidadao;
   caso: Caso | null;
+  // Quando a pessoa chegou encaminhada de outra unidade: a ficha que veio com ela.
+  encaminhamento_recebido: EncaminhamentoDetalhe | null;
   historico: EntradaHistorico[];
 };
 
@@ -75,10 +83,11 @@ export default function FilaPage() {
   const [providencia, setProvidencia] = useState("");
   const [retornoNecessario, setRetornoNecessario] = useState("");
   const [dataRetorno, setDataRetorno] = useState("");
-  const [unidadeDestinoId, setUnidadeDestinoId] = useState("");
-  const [destinoExterno, setDestinoExterno] = useState("");
-  const [motivoEncaminhamento, setMotivoEncaminhamento] = useState("");
-  const [observacaoEncaminhamento, setObservacaoEncaminhamento] = useState("");
+  const [formEncaminhamento, setFormEncaminhamento] = useState<FormularioDeEncaminhamento>(FORMULARIO_VAZIO);
+  // Os erros só aparecem depois da primeira tentativa de enviar e acompanham o que está digitado.
+  const [tentouEncaminhar, setTentouEncaminhar] = useState(false);
+  const errosEncaminhamento = tentouEncaminhar ? validarEncaminhamento(formEncaminhamento) : {};
+  const [fichaAberta, setFichaAberta] = useState<string | null>(null);
   const [motivoNaoCompareceu, setMotivoNaoCompareceu] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState("");
@@ -196,10 +205,8 @@ export default function FilaPage() {
       setProvidencia("");
       setRetornoNecessario("");
       setDataRetorno("");
-      setUnidadeDestinoId("");
-      setDestinoExterno("");
-      setMotivoEncaminhamento("");
-      setObservacaoEncaminhamento("");
+      setFormEncaminhamento(FORMULARIO_VAZIO);
+      setTentouEncaminhar(false);
       setMotivoNaoCompareceu("");
       setModalOpen(true);
       await carregar();
@@ -281,25 +288,23 @@ export default function FilaPage() {
   async function encaminhar(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!atendimento?.caso) return;
+    setTentouEncaminhar(true);
+    if (Object.keys(validarEncaminhamento(formEncaminhamento)).length > 0) return;
+
     setSalvando(true);
     setMensagem("");
     try {
       await api(`/cases/${atendimento.caso.id}/encaminhar`, {
         method: "POST",
-        body: JSON.stringify({
-          unidade_destino_id: unidadeDestinoId || null,
-          destino_externo: unidadeDestinoId ? null : destinoExterno.trim(),
-          motivo: motivoEncaminhamento.trim(),
-          observacoes: observacaoEncaminhamento.trim() || null,
-        }),
+        body: JSON.stringify(corpoDoEncaminhamento(formEncaminhamento)),
       });
       setAtendimento(null);
       setAtendimentoIniciado(false);
       setModalOpen(false);
-      setMensagem("Atendimento encaminhado e senha finalizada.");
+      setMensagem("Atendimento encaminhado com a ficha. A unidade de destino foi avisada.");
       await carregar();
     } catch (error) {
-      setMensagem(error instanceof Error ? error.message : "Não foi possível encaminhar.");
+      setMensagem(mensagemDaApi(error, "Não foi possível encaminhar."));
     } finally {
       setSalvando(false);
     }
@@ -440,6 +445,19 @@ export default function FilaPage() {
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-meta-slate">Caso em atendimento</p>
                     <strong>{atendimento.caso.protocolo}</strong>
                     <p className="text-sm text-meta-slate">{atendimento.caso.descricao || atendimento.caso.situacao}</p>
+                  </div>
+                )}
+                {atendimento.encaminhamento_recebido && (
+                  <div className="mt-4 flex flex-col gap-3 rounded-lg border border-primary/25 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-sm">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-meta-slate">Encaminhamento recebido</p>
+                      <strong>
+                        De {atendimento.encaminhamento_recebido.unidade_origem_nome || "outra unidade"} · {atendimento.encaminhamento_recebido.categoria_rotulo}
+                      </strong>
+                    </div>
+                    <SecondaryButton type="button" className="h-9 shrink-0 px-3 text-xs" onClick={() => setFichaAberta(atendimento.encaminhamento_recebido?.id ?? null)}>
+                      Ver ficha completa
+                    </SecondaryButton>
                   </div>
                 )}
               </div>
@@ -585,6 +603,8 @@ export default function FilaPage() {
         </DialogContent>
       </Dialog>
 
+      <DetalheDoEncaminhamento id={fichaAberta} onClose={() => setFichaAberta(null)} onMudou={() => void carregar()} />
+
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
           {atendimento && (
@@ -629,6 +649,21 @@ export default function FilaPage() {
                       setDataRetorno={setDataRetorno}
                       compacto
                     />
+
+                    {atendimento.encaminhamento_recebido && (
+                      <details open className="rounded-feature border border-primary/25 bg-primary/5 p-4">
+                        <summary className="cursor-pointer text-sm font-semibold text-meta-charcoal">
+                          Encaminhado de {atendimento.encaminhamento_recebido.unidade_origem_nome || "outra unidade"}: a ficha que veio com a pessoa
+                        </summary>
+                        <div className="mt-3 grid gap-3">
+                          <CabecalhoDoEncaminhamento encaminhamento={atendimento.encaminhamento_recebido} />
+                          <FichaCompleta
+                            encaminhamento={atendimento.encaminhamento_recebido}
+                            ficha={atendimento.encaminhamento_recebido.ficha}
+                          />
+                        </div>
+                      </details>
+                    )}
 
                     <ResumoHistorico historico={atendimento.historico} />
 
@@ -676,47 +711,13 @@ export default function FilaPage() {
                 )}
 
                 {modoModal === "encaminhar" && (
-                  <form className="grid gap-4" onSubmit={encaminhar}>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <Field label="Unidade da rede">
-                        <Select value={unidadeDestinoId} onChange={(event) => {
-                          setUnidadeDestinoId(event.target.value);
-                          if (event.target.value) setDestinoExterno("");
-                        }}>
-                          <option value="">Encaminhamento externo</option>
-                          {unidades.map((unidade) => (
-                            <option key={unidade.id} value={unidade.id}>
-                              {unidade.nome}
-                            </option>
-                          ))}
-                        </Select>
-                      </Field>
-                      <Field label="Destino externo">
-                        <Input
-                          value={destinoExterno}
-                          onChange={(event) => setDestinoExterno(event.target.value)}
-                          disabled={Boolean(unidadeDestinoId)}
-                          placeholder="Ex.: Conselho Tutelar, Saúde, Defensoria"
-                        />
-                      </Field>
-                    </div>
-                    <Field label="Motivo">
-                      <textarea
-                        className="input"
-                        value={motivoEncaminhamento}
-                        onChange={(event) => setMotivoEncaminhamento(event.target.value)}
-                        required
-                        placeholder="Explique por que este atendimento precisa seguir para outro setor."
-                      />
-                    </Field>
-                    <Field label="Observações, opcional">
-                      <textarea
-                        className="input"
-                        value={observacaoEncaminhamento}
-                        onChange={(event) => setObservacaoEncaminhamento(event.target.value)}
-                        placeholder="Documentos entregues, orientação dada, prazo combinado..."
-                      />
-                    </Field>
+                  <form className="grid gap-4" onSubmit={encaminhar} noValidate>
+                    <CamposDeEncaminhamento
+                      valor={formEncaminhamento}
+                      onChange={setFormEncaminhamento}
+                      unidades={unidades}
+                      erros={errosEncaminhamento}
+                    />
                     <DialogFooter>
                       <SecondaryButton type="button" onClick={() => setModalOpen(false)} disabled={salvando}>
                         Cancelar

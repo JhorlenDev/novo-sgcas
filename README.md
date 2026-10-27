@@ -31,7 +31,8 @@ Este repositório reúne o **frontend Next.js** e a **API Django**. O login é i
 | Recepção | Escolha do serviço, prioridade, atendimento no balcão e emissão de senha |
 | Atendimento | Chamada da fila, retomada, evolução, conclusão e registro de ausência |
 | Acompanhamentos | Consulta dos casos, situação e filtros por ação itinerante |
-| Benefícios e encaminhamentos | Registro vinculado ao cidadão e ao atendimento |
+| Benefícios eventuais | Registro vinculado ao cidadão e ao atendimento, com aviso e justificativa quando repete o mesmo auxílio no mês |
+| Encaminhamentos e avisos | Ficha de encaminhamento entre unidades, caixas de recebidos e enviados, resposta do destino e avisos entre as unidades |
 | Ações itinerantes | Organização das ações, resumo, balanço e conclusão |
 | Institucional | Coordenações, unidades, demandas e serviços |
 | Administração | Operadores, perfis, unidades e pedidos de acesso |
@@ -52,6 +53,66 @@ flowchart LR
 ```
 
 As senhas usam os prefixos `UR` (urgente), `PR` (alta), `NR` (normal) e `BX` (baixa). Os casos passam por `EM_TRIAGEM`, `EM_ATENDIMENTO`, `CONCLUIDO`, `ENCAMINHADO` ou `CANCELADO`.
+
+## Comunicação entre unidades
+
+O que antes andava em papel, em horas ou dias, vai pelo sistema: a pessoa atendida no CRAS e encaminhada ao CREAS chega com a ficha, a unidade de origem sabe em que pé está o atendimento e o mesmo auxílio deixa de ser concedido em várias unidades sem que ninguém saiba.
+
+### Encaminhamento com ficha
+
+Quem encaminha (`Encaminhar`, na tela de Atendimento, ou `Registrar`, no prontuário) preenche a **categoria do motivo**, a **urgência**, o **motivo** e o **resumo da situação** (obrigatórios), e, se quiser, documentos entregues, contato para retorno, prazo e observações. O destino é uma unidade da rede (o caso passa a ela, continua aberto) ou um serviço externo (o caso se encerra na origem e a origem registra o retorno depois).
+
+Segue junto, sem digitar de novo, uma fotografia do que a origem sabia: o serviço, o que a pessoa solicitou na recepção, os benefícios que já recebeu da unidade e o relato até ali.
+
+```mermaid
+flowchart LR
+    A[Origem encaminha com a ficha] --> B[PENDENTE: destino é avisado]
+    B --> C[Aceito]
+    B --> D[Recusado: o caso volta à origem]
+    B --> E[Chegada na recepção do destino]
+    C --> E
+    E --> F[Mesmo caso, na fila do destino, com a urgência da origem]
+    F --> G[Destino conclui o caso: a origem é avisada]
+```
+
+- **Chegada.** A recepção do destino mostra o encaminhamento pendente da pessoa e, ao iniciar o atendimento, vincula a visita a ele. O caso é o mesmo (não nasce um segundo), a senha entra na fila na urgência definida pela origem e a origem recebe o aviso. O técnico que chama a pessoa lê a ficha na própria conferência do atendimento.
+- **Resposta.** O destino aceita ou recusa (a recusa exige o motivo e devolve o caso à origem). Concluir o caso no destino conclui o encaminhamento; "não compareceu" também.
+- **Avisos.** Cada passo gera um aviso para a unidade interessada: encaminhamento recebido, aceito, recusado, pessoa chegou, atendimento concluído, pessoa não compareceu, encaminhado adiante e benefício repetido. O texto é montado na hora, com o nome do cadastro; após a eliminação LGPD o aviso mostra "Cidadão excluído". O menu **Encaminhamentos** mostra a soma do que aguarda resposta e do que não foi lido (atualiza a cada minuto).
+
+### O que cada perfil vê
+
+| | Equipe técnica (administrador, coordenador, assistente social, técnico, gestor de ações itinerantes) | Recepção | Visualizador |
+| --- | --- | --- | --- |
+| De onde, para onde, quando, categoria, urgência, prazo | Sim | Sim | Não |
+| Motivo, resumo, documentos, contato, observações, resposta e a ficha | Sim | **Não** | Não |
+| Quem encaminhou | Sim | Não (só a unidade) | Não |
+| Aceitar, recusar e registrar retorno | Sim | Não | Não |
+
+A regra vale na API (os campos nem são enviados à recepção) e na tela. O texto do motivo, e o da recusa, **não são gravados no relato do caso**, que a recepção também lê; o relato registra só para onde, a categoria e a urgência.
+
+> **Limite conhecido.** A recepção continua lendo o relato dos casos (as observações que os técnicos escrevem) pelo histórico municipal e por `/api/cases/`. Isso já era assim antes dos encaminhamentos e é uma decisão de privacidade que cabe à direção: se o relato puder conter violência ou saúde, vale restringi-lo também.
+
+### Mesmo auxílio em várias unidades
+
+Ao registrar um benefício, ou ao encaminhar à fila um pedido de serviço da demanda **Benefício Eventual**, o sistema confere o **mês corrente** (no fuso do município), em todas as unidades:
+
+- benefício do mesmo tipo já concedido (em "Outros", compara o que foi dado, sem diferença de caixa ou espaços);
+- no balcão, também pedido do mesmo tipo já encaminhado à fila de alguma unidade.
+
+Havendo repetição, a tela mostra **onde, quando e o quê** e só segue com uma **justificativa escrita** (mínimo de 10 caracteres). Não bloqueia: quem tem necessidade nova não fica travado por atendimento antigo. A justificativa fica no histórico municipal, as outras unidades recebem o aviso (sem o texto) e a auditoria não a guarda. Negar o pedido no balcão ("finalizado") nunca exige justificativa, e cumprir um encaminhamento não conta o atendimento que o originou como repetição. A pessoa é travada durante o registro, para dois balcões simultâneos não passarem juntos.
+
+> **Configuração necessária.** O controle do balcão vale para os serviços ligados à demanda **Benefício Eventual** (tela Institucional). Um serviço de auxílio que não esteja ligado a ela não é controlado no balcão (o registro de benefício no prontuário é sempre controlado).
+
+### Rotas
+
+| Rota | Uso |
+| --- | --- |
+| `GET /api/referrals/recebidos` · `enviados` | Caixas da unidade (`?situacao=abertos\|todos\|PENDENTE…`, `?cidadao=`) |
+| `GET /api/referrals/<id>` | Encaminhamento (a ficha só para a equipe técnica) |
+| `POST /api/referrals/<id>/aceitar` · `recusar` · `concluir` | Resposta do destino; retorno de um encaminhamento externo, pela origem |
+| `GET /api/notices/` · `resumo` | Avisos da unidade e os números do menu |
+| `POST /api/notices/lidos` · `<id>/lido` | Marcar como lido |
+| `GET /api/citizens/<id>/duplicidade?servico_id=…\|tipo=…` | Aviso de repetição antes de enviar |
 
 ## Arquitetura
 

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  ArrowLeftRight,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -24,6 +25,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { defaultRouteForRole, useAuth } from "@/lib/auth";
+import { useResumoDosAvisos } from "@/lib/avisos";
 import { SessionLoading } from "@/components/shared/session-loading";
 
 const navItems = [
@@ -32,6 +34,12 @@ const navItems = [
   { href: "/recepcao", label: "Recepção", icon: Headset },
   { href: "/fila", label: "Atendimento", icon: Stethoscope },
   { href: "/casos", label: "Acompanhamentos", icon: ClipboardList },
+  {
+    href: "/encaminhamentos",
+    label: "Encaminhamentos",
+    icon: ArrowLeftRight,
+    roles: ["ADMIN", "COORDENADOR", "ASSISTENTE_SOCIAL", "TECNICO", "RECEPCIONISTA", "GESTOR_ACOES_ITINERANTES"],
+  },
   { href: "/acoes-itinerantes", label: "Ações itinerantes", icon: MapPinned, roles: ["ADMIN", "GESTOR_ACOES_ITINERANTES"] },
   { href: "/institucional", label: "Institucional", icon: Building2, roles: ["ADMIN", "COORDENADOR"] },
   { href: "/admin", label: "Usuários", icon: Users, roles: ["ADMIN", "COORDENADOR"] },
@@ -43,6 +51,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { resumo } = useResumoDosAvisos(user?.papel);
+  // O que pede a atenção da unidade: o que aguarda resposta e o que não foi lido.
+  const pendencias = resumo ? resumo.encaminhamentos_pendentes + resumo.avisos_nao_lidos : 0;
 
   useEffect(() => {
     if (!loading && !user) {
@@ -91,6 +102,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         role={user.papel}
         collapsed={sidebarCollapsed}
         onToggle={toggleSidebar}
+        pendencias={pendencias}
       />
       <MobileSidebar
         pathname={pathname}
@@ -98,6 +110,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         role={user.papel}
         open={mobileOpen}
         onClose={() => setMobileOpen(false)}
+        pendencias={pendencias}
       />
 
       <div className={cn("transition-[padding] duration-300", sidebarCollapsed ? "md:pl-20" : "md:pl-64")}>
@@ -155,12 +168,14 @@ function Sidebar({
   role,
   collapsed,
   onToggle,
+  pendencias,
 }: {
   pathname: string;
   homeHref: string;
   role: string;
   collapsed: boolean;
   onToggle: () => void;
+  pendencias: number;
 }) {
   return (
     <aside
@@ -183,7 +198,7 @@ function Sidebar({
             {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </Button>
         </div>
-        <Nav pathname={pathname} role={role} compact={collapsed} />
+        <Nav pathname={pathname} role={role} compact={collapsed} pendencias={pendencias} />
         <Footer compact={collapsed} />
       </div>
     </aside>
@@ -196,12 +211,14 @@ function MobileSidebar({
   role,
   open,
   onClose,
+  pendencias,
 }: {
   pathname: string;
   homeHref: string;
   role: string;
   open: boolean;
   onClose: () => void;
+  pendencias: number;
 }) {
   if (!open) return null;
 
@@ -216,7 +233,7 @@ function MobileSidebar({
           </Button>
         </div>
         <div onClick={onClose}>
-          <Nav pathname={pathname} role={role} />
+          <Nav pathname={pathname} role={role} pendencias={pendencias} />
         </div>
         <Footer />
       </aside>
@@ -242,26 +259,48 @@ function Brand({ href, compact = false, hideText = false }: { href: string; comp
   );
 }
 
-function Nav({ pathname, role, compact = false }: { pathname: string; role: string; compact?: boolean }) {
+function Nav({
+  pathname,
+  role,
+  compact = false,
+  pendencias = 0,
+}: {
+  pathname: string;
+  role: string;
+  compact?: boolean;
+  pendencias?: number;
+}) {
   const visibleItems = navItems.filter((item) => !item.roles || item.roles.includes(role));
 
   return (
     <nav className={cn("flex-1 space-y-1", compact ? "px-3" : "px-3")}>
       {visibleItems.map((item) => {
         const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+        const selo = item.href === "/encaminhamentos" ? pendencias : 0;
         return (
           <Link
             key={item.href}
             href={item.href}
-            title={item.label}
+            title={selo ? `${item.label} — ${selo} pendente(s)` : item.label}
             className={cn(
-              "flex items-center rounded-pill px-4 py-2.5 text-[15px] font-medium tracking-tight transition-all duration-200",
+              "relative flex items-center rounded-pill px-4 py-2.5 text-[15px] font-medium tracking-tight transition-all duration-200",
               compact && "justify-center px-0",
               isActive ? "bg-primary text-primary-foreground shadow-lift" : "text-meta-charcoal hover:bg-meta-soft-gray",
             )}
           >
             <item.icon className={cn("h-[18px] w-[18px] flex-shrink-0", !compact && "mr-3", isActive ? "" : "text-meta-slate")} />
             <span className={cn(compact && "sr-only")}>{item.label}</span>
+            {selo > 0 && (
+              <span
+                className={cn(
+                  "ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-semibold leading-5 text-white",
+                  compact && "absolute right-2 top-1 ml-0",
+                )}
+                aria-label={`${selo} pendente(s)`}
+              >
+                {selo > 99 ? "99+" : selo}
+              </span>
+            )}
           </Link>
         );
       })}

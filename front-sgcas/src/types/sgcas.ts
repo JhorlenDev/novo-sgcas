@@ -117,6 +117,8 @@ export type BeneficioEventual = {
   tipo_rotulo?: string | null;
   tipo_outro?: string | null;
   descricao?: string | null;
+  // Escrita quando o mesmo benefício já tinha sido concedido no mês.
+  justificativa_duplicidade?: string | null;
   registrado_por?: string | null;
   registrado_por_nome?: string | null;
   unidade?: string | null;
@@ -125,17 +127,112 @@ export type BeneficioEventual = {
   atualizado_em: string;
 };
 
-export type Encaminhamento = {
+export type SituacaoDoEncaminhamento = "PENDENTE" | "ACEITO" | "RECUSADO" | "CONCLUIDO";
+
+export type CategoriaDoMotivo =
+  | "VIOLACAO_DE_DIREITOS"
+  | "SITUACAO_DE_RUA"
+  | "ACOMPANHAMENTO_FAMILIAR"
+  | "BENEFICIO_EVENTUAL"
+  | "SAUDE"
+  | "DOCUMENTACAO"
+  | "OUTRO";
+
+export type Urgencia = "BAIXA" | "NORMAL" | "ALTA" | "URGENTE";
+
+/** O que a recepção vê de um encaminhamento: quem, de onde, quando e a categoria. Sem o relato. */
+export type EncaminhamentoResumo = {
   id: string;
-  caso: string;
-  situacao: string;
-  motivo: string;
-  observacoes?: string | null;
+  cidadao: string;
+  cidadao_nome: string;
+  situacao: SituacaoDoEncaminhamento;
+  categoria_do_motivo: CategoriaDoMotivo;
+  categoria_rotulo: string;
+  urgencia: Urgencia;
+  urgencia_rotulo: string;
+  prazo?: string | null;
+  unidade_origem?: string | null;
+  unidade_origem_nome?: string | null;
   unidade_destino?: string | null;
   unidade_destino_nome?: string | null;
   destino_externo: string;
-  encaminhado_por_nome: string;
+  chegou_em?: string | null;
+  concluido_em?: string | null;
   criado_em: string;
+};
+
+/** O encaminhamento como os técnicos o veem: tudo. */
+export type Encaminhamento = EncaminhamentoResumo & {
+  caso: string;
+  caso_protocolo: string;
+  motivo: string;
+  resumo_da_situacao: string;
+  documentos_entregues?: string | null;
+  contato_para_retorno?: string | null;
+  observacoes?: string | null;
+  encaminhado_por_nome: string;
+  respondido_por_nome?: string | null;
+  respondido_em?: string | null;
+  resposta?: string | null;
+  resultado?: string | null;
+};
+
+/** A fotografia do que a origem sabia ao encaminhar. */
+export type FichaDoEncaminhamento = {
+  gerada_em: string;
+  unidade_origem: string;
+  protocolo: string;
+  aberto_em: string;
+  prioridade: string;
+  servico: { nome: string; categoria: string | null } | null;
+  solicitado: Array<{ quando: string; unidade: string; demanda: string; desfecho: string; observacao: string | null }>;
+  relato: string | null;
+  beneficios_concedidos: Array<{ quando: string; unidade: string | null; tipo: string; descricao: string | null }>;
+};
+
+export type EncaminhamentoDetalhe = Encaminhamento & { ficha: FichaDoEncaminhamento | null };
+
+export type TipoDeAviso =
+  | "ENCAMINHAMENTO_RECEBIDO"
+  | "ENCAMINHAMENTO_ACEITO"
+  | "ENCAMINHAMENTO_RECUSADO"
+  | "PESSOA_CHEGOU"
+  | "ENCAMINHAMENTO_CONCLUIDO"
+  | "NAO_COMPARECEU"
+  | "ENCAMINHADO_ADIANTE"
+  | "BENEFICIO_REPETIDO";
+
+export type Aviso = {
+  id: string;
+  tipo: TipoDeAviso;
+  titulo: string;
+  mensagem: string;
+  cidadao?: string | null;
+  cidadao_nome?: string | null;
+  encaminhamento?: string | null;
+  criado_em: string;
+  lido: boolean;
+  lido_em?: string | null;
+};
+
+export type ResumoDosAvisos = {
+  avisos_nao_lidos: number;
+  encaminhamentos_pendentes: number;
+};
+
+/** Um auxílio já concedido ou pedido neste mês, em qualquer unidade. */
+export type AlertaDeDuplicidade = {
+  origem: "beneficio" | "atendimento";
+  quando: string;
+  unidade: string;
+  unidade_id: string | null;
+  o_que: string;
+  detalhe: string | null;
+};
+
+export type RespostaDeDuplicidade = {
+  alertas: AlertaDeDuplicidade[];
+  exige_justificativa: boolean;
 };
 
 export type PainelRecepcao = {
