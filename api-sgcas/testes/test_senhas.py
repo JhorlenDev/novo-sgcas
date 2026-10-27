@@ -15,6 +15,7 @@ from django.utils import timezone
 
 from apps.atendimentos import api
 from apps.atendimentos.models import SenhaDaFila
+from apps.cidadaos.models import Cidadao
 from testes.base import CenarioBase
 
 
@@ -69,12 +70,22 @@ class DuasRecepcoesAoMesmoTempo(TransactionTestCase):
     def setUp(self):
         CenarioBase.setUpTestData.__func__(type(self))
 
-    def _registrar(self, resultados, indice):
+    def _pessoas(self, quantas):
+        # Uma pessoa por atendimento: o registro trava a *pessoa* (ver `duplicidade`),
+        # e com a mesma pessoa em todas as threads era essa trava, não a da
+        # numeração, que as enfileirava — o teste deixaria de provar o que diz.
+        agora = timezone.now()
+        return [
+            Cidadao.objects.create(id=str(uuid.uuid4()), nome=f'Pessoa {i}', criado_em=agora, atualizado_em=agora)
+            for i in range(quantas)
+        ]
+
+    def _registrar(self, resultados, indice, cidadao):
         try:
             cliente = CenarioBase.como(self, self.recepcionista)
             resposta = cliente.post(
                 '/api/reception/atendimento',
-                {'cidadao_id': self.cidadao.id, 'servico_id': self.servico.id, 'desfecho': 'ENCAMINHADO'},
+                {'cidadao_id': cidadao.id, 'servico_id': self.servico.id, 'desfecho': 'ENCAMINHADO'},
                 content_type='application/json',
             )
             resultados[indice] = resposta
@@ -99,7 +110,8 @@ class DuasRecepcoesAoMesmoTempo(TransactionTestCase):
 
         resultados = {}
         with mock.patch.object(api, '_proxima_senha', calcular_e_esperar):
-            fios = [threading.Thread(target=self._registrar, args=(resultados, i)) for i in range(2)]
+            pessoas = self._pessoas(2)
+            fios = [threading.Thread(target=self._registrar, args=(resultados, i, pessoas[i])) for i in range(2)]
             for fio in fios:
                 fio.start()
             for fio in fios:
@@ -111,7 +123,8 @@ class DuasRecepcoesAoMesmoTempo(TransactionTestCase):
 
     def test_varias_senhas_simultaneas_saem_todas_diferentes(self):
         resultados = {}
-        fios = [threading.Thread(target=self._registrar, args=(resultados, i)) for i in range(6)]
+        pessoas = self._pessoas(6)
+        fios = [threading.Thread(target=self._registrar, args=(resultados, i, pessoas[i])) for i in range(6)]
         for fio in fios:
             fio.start()
         for fio in fios:

@@ -95,6 +95,17 @@ def _mesmo_mes(momento: datetime) -> bool:
     return (local.year, local.month) == (agora.year, agora.month)
 
 
+def _com_justificativa(detalhe: str | None, justificativa: str | None) -> str | None:
+    """
+    Quando o atendimento repetiu um auxílio do mês, a justificativa vai junto: é o
+    que a próxima unidade precisa ler para entender por que se repetiu.
+    """
+    if not justificativa:
+        return detalhe
+    nota = f'Justificativa para repetir: {justificativa}'
+    return f'{detalhe} {nota}' if detalhe else nota
+
+
 def do_cidadao(cidadao: Cidadao, leitor: Operador) -> list[Entrada]:
     """
     Linha do tempo de todas as unidades, do mais recente para o mais antigo.
@@ -118,7 +129,7 @@ def do_cidadao(cidadao: Cidadao, leitor: Operador) -> list[Entrada]:
             quando=_com_fuso(b.criado_em),
             unidade=b.unidade.nome if b.unidade else 'Unidade não informada',
             o_que=f'Benefício concedido: {rotulo}',
-            detalhe=b.descricao,
+            detalhe=_com_justificativa(b.descricao, b.justificativa_duplicidade),
             quem_atendeu=b.registrado_por.nome if mostra_quem and b.registrado_por else None,
             no_mes_corrente=_mesmo_mes(b.criado_em),
             _outra_unidade=bool(b.unidade_id) and b.unidade_id != unidade_do_leitor,
@@ -158,6 +169,7 @@ def do_cidadao(cidadao: Cidadao, leitor: Operador) -> list[Entrada]:
         detalhe = observacao
         if destino:
             detalhe = f'Encaminhado para {destino}. {observacao}' if observacao else f'Encaminhado para {destino}.'
+        detalhe = _com_justificativa(detalhe, r.justificativa_duplicidade)
         entradas.append(Entrada(
             quando=_com_fuso(r.criado_em),
             unidade=r.unidade.nome,
@@ -196,23 +208,3 @@ def do_cidadao(cidadao: Cidadao, leitor: Operador) -> list[Entrada]:
         ))
 
     return sorted(entradas, key=lambda e: e.quando, reverse=True)
-
-
-def alerta_de_duplicidade(cidadao: Cidadao, tipo_pedido: str) -> BeneficioEventual | None:
-    """
-    Devolve a concessão do mesmo tipo no mês corrente, se houver.
-
-    É um aviso para quem atende, não um impedimento: quem decide é a pessoa no
-    balcão, que sabe se o pedido de hoje tem ou não relação com o anterior.
-    """
-    agora = timezone.localtime(timezone.now())
-    inicio_do_mes = agora.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-    return (
-        BeneficioEventual.vigentes.filter(
-            cidadao=cidadao, tipo=tipo_pedido, criado_em__gte=inicio_do_mes
-        )
-        .select_related('unidade')
-        .order_by('-criado_em')
-        .first()
-    )

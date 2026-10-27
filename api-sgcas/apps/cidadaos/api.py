@@ -30,7 +30,7 @@ from apps.atendimentos.serializers import (
     NovoEncaminhamentoDoCidadaoSerializer,
     SenhaSerializer,
 )
-from apps.atendimentos import encaminhamentos, historico
+from apps.atendimentos import duplicidade, encaminhamentos, historico
 from apps.auditoria.redacao import redigir
 from apps.comum.rede import ip_do_cliente
 from apps.cidadaos.models import Cidadao
@@ -50,9 +50,11 @@ from django.utils import timezone
 from apps.cidadaos import anexos as arquivos
 from apps.cidadaos import eliminacao
 from apps.cidadaos import pre_cadastro
-from apps.contas.permissoes import EquipeDeAtendimento, PodeConsultar, Recepcao, Supervisao
+from apps.contas.permissoes import (
+    ComunicacaoEntreUnidades, EquipeDeAtendimento, PodeConsultar, Recepcao, Supervisao,
+)
 from apps.contas.escopo import pode_acessar_unidade
-from apps.institucional.models import Unidade
+from apps.institucional.models import Servico, Unidade
 
 LIMITE_DA_BUSCA = 50
 
@@ -400,19 +402,32 @@ def registrar_beneficio(request, cidadao_id: str):
     d = dados.validated_data
     agora = timezone.now()
 
+    # Uma pessoa por vez: dois registros simultâneos conferiam a repetição antes
+    # de qualquer um gravar, e os dois passavam.
+    Cidadao.objects.select_for_update().filter(pk=cidadao.pk).first()
+    tipo_outro = (d.get('tipo_outro') or '').strip() or None
+    alertas = duplicidade.alertas_de_beneficio(cidadao, d['tipo'], tipo_outro)
+    if (recusa := duplicidade.exigir_justificativa(alertas, d.get('justificativa_duplicidade'))) is not None:
+        return recusa
+
     beneficio = BeneficioEventual(
         id=str(uuid.uuid4()),
         cidadao=cidadao,
         nome_da_pessoa=(d.get('nome_da_pessoa') or cidadao.nome).strip(),
         tipo=d['tipo'],
-        tipo_outro=(d.get('tipo_outro') or '').strip() or None,
+        tipo_outro=tipo_outro,
         descricao=(d.get('descricao') or '').strip() or None,
+        justificativa_duplicidade=duplicidade.justificativa_a_gravar(alertas, d.get('justificativa_duplicidade')),
         registrado_por=request.user,
         unidade=getattr(request.user, 'unidade', None),
         criado_em=agora,
         atualizado_em=agora,
     )
     beneficio.save(force_insert=True)
+    if alertas and beneficio.unidade_id:
+        duplicidade.avisar_as_outras_unidades(
+            alertas, beneficio.unidade, tipo_outro or dict(BeneficioEventual.Tipo.choices)[d['tipo']], cidadao, agora,
+        )
 
     _registrar_auditoria(
         request,
@@ -504,6 +519,35 @@ def registrar_encaminhamento(request, cidadao_id: str):
     )
 
     return Response(EncaminhamentoSerializer(encaminhamento).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([ComunicacaoEntreUnidades])
+def verificar_duplicidade(request, cidadao_id: str):
+    """
+    O aviso de repetição, antes de enviar: a tela o mostra assim que o serviço (no
+    balcão) ou o tipo (no prontuário) é escolhido, em vez de só descobrir ao
+    receber o 409.
+    """
+    cidadao = Cidadao.vigentes.filter(id=cidadao_id).first()
+    if cidadao is None:
+        return Response({'detalhe': 'Cidadão não encontrado'}, status=status.HTTP_404_NOT_FOUND)
+
+    servico_id = request.query_params.get('servico_id')
+    tipo = request.query_params.get('tipo')
+    if servico_id:
+        servico = Servico.objects.filter(id=servico_id, ativo=True).select_related('demanda').first()
+        if servico is None:
+            return Response({'servico_id': 'Serviço não encontrado'}, status=status.HTTP_400_BAD_REQUEST)
+        alertas = duplicidade.alertas_para_servico(cidadao, servico)
+    elif tipo:
+        if tipo not in BeneficioEventual.Tipo.values:
+            return Response({'tipo': 'Tipo de benefício inválido'}, status=status.HTTP_400_BAD_REQUEST)
+        alertas = duplicidade.alertas_de_beneficio(cidadao, tipo, request.query_params.get('tipo_outro'))
+    else:
+        return Response({'detalhe': 'Informe servico_id ou tipo.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    return Response({'alertas': alertas, 'exige_justificativa': bool(alertas)})
 
 
 @api_view(['POST'])

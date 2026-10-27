@@ -39,6 +39,11 @@ def mensagem(aviso: Aviso) -> str:
     if aviso.tipo == Tipo.ENCAMINHADO_ADIANTE:
         return f'{d.get("unidade")} encaminhou {nome} para {d.get("destino")}.'
     if aviso.tipo == Tipo.BENEFICIO_REPETIDO:
+        if d.get('pedido'):
+            return (
+                f'{d.get("unidade")} atendeu novamente o pedido de {d.get("o_que")} de {nome} '
+                f'neste mês. Justificativa registrada.'
+            )
         return (
             f'{d.get("unidade")} concedeu {d.get("o_que")} novamente a {nome} neste mês. '
             f'Justificativa registrada.'

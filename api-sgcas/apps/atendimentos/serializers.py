@@ -92,7 +92,7 @@ class BeneficioEventualSerializer(serializers.ModelSerializer):
         model = BeneficioEventual
         fields = [
             'id', 'cidadao', 'cidadao_nome', 'nome_da_pessoa', 'tipo', 'tipo_rotulo',
-            'tipo_outro', 'descricao', 'registrado_por', 'registrado_por_nome',
+            'tipo_outro', 'descricao', 'justificativa_duplicidade', 'registrado_por', 'registrado_por_nome',
             'unidade', 'unidade_nome', 'criado_em', 'atualizado_em',
         ]
 
@@ -105,6 +105,8 @@ class NovoBeneficioEventualSerializer(serializers.Serializer):
     tipo = serializers.ChoiceField(choices=BeneficioEventual.Tipo.choices)
     tipo_outro = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     descricao = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    # Exigida quando o mesmo benefício já foi concedido no mês (ver `duplicidade`).
+    justificativa_duplicidade = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def validate(self, dados):
         if dados['tipo'] == BeneficioEventual.Tipo.OUTROS and not (dados.get('tipo_outro') or '').strip():
@@ -160,6 +162,8 @@ class RegistroDeRecepcaoSerializer(serializers.Serializer):
     # A visita cumpre este encaminhamento: é o mesmo caso, com a ficha, na fila do
     # destino — em vez de abrir um segundo caso para a mesma pessoa.
     encaminhamento_id = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    # Exigida quando o pedido repete um auxílio já concedido ou pedido no mês.
+    justificativa_duplicidade = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def validate_prioridade(self, valor):
         # Rebaixa em vez de recusar: a recepção pediu urgência de boa-fé, e

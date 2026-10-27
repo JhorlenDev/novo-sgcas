@@ -9,7 +9,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
-from apps.atendimentos import encaminhamentos, historico
+from apps.atendimentos import duplicidade, encaminhamentos, historico
 from apps.atendimentos.relato import acrescentar_ao_relato as _acrescentar_ao_relato
 from apps.atendimentos.models import (
     AcaoItinerante,
@@ -215,6 +215,18 @@ def registrar_recepcao(request):
         if erro is not None:
             return erro
 
+    # Repetir um auxílio já concedido ou pedido no mês exige justificativa. Negar
+    # no balcão (FINALIZADO) é o certo e nunca exige. A pessoa é travada para que
+    # dois balcões simultâneos não conferam o histórico antes de qualquer um gravar.
+    alertas = []
+    if d['desfecho'] == AtendimentoDeRecepcao.Desfecho.ENCAMINHADO:
+        Cidadao.objects.select_for_update().filter(pk=cidadao.pk).first()
+        alertas = duplicidade.alertas_para_servico(
+            cidadao, servico, ignorar_caso_id=caso_encaminhado.id if caso_encaminhado else None,
+        )
+        if (recusa := duplicidade.exigir_justificativa(alertas, d.get('justificativa_duplicidade'))) is not None:
+            return recusa
+
     agora = timezone.now()
     caso = None
     senha = None
@@ -266,8 +278,11 @@ def registrar_recepcao(request):
         id=str(uuid.uuid4()), cidadao=cidadao, unidade_id=operador.unidade_id,
         atendido_por=operador, demanda=servico.nome, desfecho=d['desfecho'],
         motivo=d.get('motivo') or None, caso=caso, encaminhamento=encaminhamento,
+        justificativa_duplicidade=duplicidade.justificativa_a_gravar(alertas, d.get('justificativa_duplicidade')),
         acao_itinerante_id=d.get('acao_itinerante_id') or None,
     ).save(force_insert=True)
+    if alertas:
+        duplicidade.avisar_as_outras_unidades(alertas, operador.unidade, servico.nome, cidadao, agora, pedido=True)
 
     if encaminhamento is not None:
         encaminhamentos.registrar_chegada(encaminhamento, operador, agora)

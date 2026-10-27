@@ -1,9 +1,9 @@
-"""Histórico municipal e a checagem de duplicidade."""
+"""Histórico municipal e a checagem de duplicidade (a regra completa está em test_duplicidade)."""
 import uuid
 
 from django.utils import timezone
 
-from apps.atendimentos import historico
+from apps.atendimentos import duplicidade, historico
 from apps.atendimentos.models import BeneficioEventual
 from testes.base import CenarioBase
 
@@ -52,10 +52,10 @@ class AlertaDeDuplicidade(CenarioBase):
         )
 
     def test_avisa_no_mesmo_tipo(self):
-        alerta = historico.alerta_de_duplicidade(self.cidadao, BeneficioEventual.Tipo.VULNERABILIDADE)
-        self.assertIsNotNone(alerta)
-        self.assertEqual(alerta.unidade.nome, 'CRAS Centro')
+        alertas = duplicidade.alertas_de_beneficio(self.cidadao, BeneficioEventual.Tipo.VULNERABILIDADE)
+        self.assertEqual(len(alertas), 1)
+        self.assertEqual(alertas[0]['unidade'], 'CRAS Centro')
 
     def test_nao_avisa_em_tipo_diferente(self):
         # Pedido novo segue o fluxo normal.
-        self.assertIsNone(historico.alerta_de_duplicidade(self.cidadao, BeneficioEventual.Tipo.MORTE))
+        self.assertEqual(duplicidade.alertas_de_beneficio(self.cidadao, BeneficioEventual.Tipo.MORTE), [])

@@ -159,7 +159,9 @@ class ChegadaCumpreOEncaminhamento(_Chegada):
 class QuandoNaoHaVinculo(_Chegada):
     def test_sem_encaminhamento_id_tudo_continua_como_antes(self):
         _, enc = self.enviar()
-        resposta = self.chegar()                         # a recepção escolheu não vincular
+        # Sem o vínculo, a chegada é um pedido novo — e o sistema o trata como a
+        # repetição que é, exigindo a justificativa (ver test_duplicidade).
+        resposta = self.chegar(justificativa_duplicidade='A recepção optou por abrir um atendimento novo.')
 
         self.assertEqual(resposta.status_code, 201, resposta.content)
         self.assertEqual(Caso.objects.filter(cidadao=self.cidadao).count(), 2)
