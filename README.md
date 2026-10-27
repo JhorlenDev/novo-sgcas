@@ -101,7 +101,7 @@ Ao registrar um benefício, ou ao encaminhar à fila um pedido de serviço da de
 
 Havendo repetição, a tela mostra **onde, quando e o quê** e só segue com uma **justificativa escrita** (mínimo de 10 caracteres). Não bloqueia: quem tem necessidade nova não fica travado por atendimento antigo. A justificativa fica no histórico municipal, as outras unidades recebem o aviso (sem o texto) e a auditoria não a guarda. Negar o pedido no balcão ("finalizado") nunca exige justificativa, e cumprir um encaminhamento não conta o atendimento que o originou como repetição. A pessoa é travada durante o registro, para dois balcões simultâneos não passarem juntos.
 
-> **Configuração necessária.** O controle do balcão vale para os serviços ligados à demanda **Benefício Eventual** (tela Institucional). Um serviço de auxílio que não esteja ligado a ela não é controlado no balcão (o registro de benefício no prontuário é sempre controlado). Como o serviço não diz que tipo de auxílio é, o balcão só enxerga o que é do mês: a regra de um ano vale no registro do benefício e na prévia, onde o tipo é conhecido.
+> **Configuração necessária.** O controle do balcão vale para os serviços ligados à categoria **Benefício Eventual**, na tela Institucional (**Novo serviço**, ou **Classificar** num serviço já cadastrado). Um serviço de auxílio que não esteja nessa categoria não é controlado no balcão; o registro de benefício no prontuário é sempre controlado. Nesses serviços, informe também o **tipo de auxílio** (por exemplo, "Situação de nascimento" para o auxílio maternidade): o nome do serviço é texto livre e não diz ao balcão que tipo é, e é o tipo que decide a janela (um ano no auxílio de nascimento, o mês nos demais). Sem o tipo, o balcão só considera o mês. O administrador classifica os serviços de qualquer unidade; o coordenador, os da sua.
 
 ### Rotas
 
@@ -113,6 +113,7 @@ Havendo repetição, a tela mostra **onde, quando e o quê** e só segue com uma
 | `GET /api/notices/` · `resumo` | Avisos da unidade e os números do menu |
 | `POST /api/notices/lidos` · `<id>/lido` | Marcar como lido |
 | `GET /api/citizens/<id>/duplicidade?servico_id=…\|tipo=…` | Aviso de repetição antes de enviar |
+| `PATCH /api/institutional/services/<id>` | Categoria e tipo de auxílio de um serviço (administrador; coordenador, na sua unidade) |
 
 ## Arquitetura
 

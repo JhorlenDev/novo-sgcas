@@ -12,7 +12,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, SecondaryButton, Select } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, mensagemDaApi } from "@/lib/api";
+import { CATEGORIA_DE_BENEFICIO, TIPOS_DE_AUXILIO } from "@/lib/auxilios";
+import { useAuth } from "@/lib/auth";
 import type { Coordenacao, Demanda, Servico, Unidade } from "@/types/sgcas";
 
 const tiposDeUnidade = [
@@ -24,7 +26,71 @@ const tiposDeUnidade = [
   ["OUTRO", "Outro"],
 ] as const;
 
+type Classificacao = { demandaId: string; tipo: string };
+
+const SEM_CLASSIFICACAO: Classificacao = { demandaId: "", tipo: "" };
+
+/** O que vai à API: o tipo de auxílio só existe em serviço da categoria "Benefício Eventual". */
+function corpoDaClassificacao(classificacao: Classificacao, demandas: Demanda[]) {
+  const ehBeneficio = demandas.find((d) => d.id === classificacao.demandaId)?.nome === CATEGORIA_DE_BENEFICIO;
+  return {
+    demanda_id: classificacao.demandaId || null,
+    tipo_de_beneficio: ehBeneficio ? classificacao.tipo || null : null,
+  };
+}
+
+/**
+ * Onde o serviço se classifica: a categoria municipal e, nos auxílios, o tipo.
+ * É a mesma escolha ao cadastrar e ao corrigir um serviço, por isso é um componente só.
+ */
+function CamposDeClassificacao({
+  demandas,
+  valor,
+  onChange,
+}: {
+  demandas: Demanda[];
+  valor: Classificacao;
+  onChange: (proximo: Classificacao) => void;
+}) {
+  const ehBeneficio = demandas.find((d) => d.id === valor.demandaId)?.nome === CATEGORIA_DE_BENEFICIO;
+
+  return (
+    <>
+      <Field label="Categoria municipal">
+        <Select value={valor.demandaId} onChange={(event) => onChange({ demandaId: event.target.value, tipo: "" })}>
+          <option value="">Sem categoria</option>
+          {demandas.map((demanda) => (
+            <option key={demanda.id} value={demanda.id}>{demanda.nome}</option>
+          ))}
+        </Select>
+      </Field>
+      {ehBeneficio && (
+        <>
+          <Field label="Tipo de auxílio">
+            <Select value={valor.tipo} onChange={(event) => onChange({ ...valor, tipo: event.target.value })}>
+              <option value="">Não informado</option>
+              {TIPOS_DE_AUXILIO.map((tipo) => (
+                <option key={tipo.valor} value={tipo.valor}>{tipo.rotulo}</option>
+              ))}
+            </Select>
+          </Field>
+          <p className="-mt-2 text-xs leading-5 text-meta-slate">
+            Informe o tipo para o sistema avisar quando a mesma pessoa pedir o mesmo auxílio de novo. O auxílio de
+            nascimento (o auxílio maternidade) só pode ser concedido uma vez a cada 12 meses; os demais tipos, uma vez
+            por mês. Sem o tipo, o aviso na recepção só considera o mês.
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+
 export default function InstitucionalPage() {
+  const { user } = useAuth();
+  const [classificacao, setClassificacao] = useState<Classificacao>(SEM_CLASSIFICACAO);
+  const [editando, setEditando] = useState<Servico | null>(null);
+  const [edicao, setEdicao] = useState<Classificacao>(SEM_CLASSIFICACAO);
+  const [erroDaEdicao, setErroDaEdicao] = useState("");
   const [unidades, setUnidades] = useState<Unidade[]>([]);
   const [servicos, setServicos] = useState<Servico[]>([]);
   const [coordenacoes, setCoordenacoes] = useState<Coordenacao[]>([]);
@@ -84,12 +150,44 @@ export default function InstitucionalPage() {
     }
   }
 
+  // O administrador classifica os serviços de qualquer unidade; o coordenador, os da sua.
+  function podeClassificar(servico: Servico) {
+    return user?.papel === "ADMIN" || (user?.papel === "COORDENADOR" && servico.unidade === user.unidade?.id);
+  }
+
+  function abrirClassificacao(servico: Servico) {
+    setEdicao({ demandaId: servico.demanda_id ?? "", tipo: servico.tipo_de_beneficio ?? "" });
+    setErroDaEdicao("");
+    setEditando(servico);
+  }
+
+  async function salvarClassificacao(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editando) return;
+    setErroDaEdicao("");
+    setSalvando(true);
+    try {
+      await api(`/institutional/services/${editando.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(corpoDaClassificacao(edicao, demandas)),
+      });
+      setEditando(null);
+      await carregar();
+      setMensagem("Classificação do serviço atualizada.");
+    } catch (error) {
+      setErroDaEdicao(mensagemDaApi(error, "Não foi possível atualizar o serviço."));
+    } finally {
+      setSalvando(false);
+    }
+  }
+
   async function criarServico(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMensagem("");
     setSalvando(true);
 
-    const form = new FormData(event.currentTarget);
+    const formulario = event.currentTarget;
+    const form = new FormData(formulario);
     try {
       await api("/institutional/services", {
         method: "POST",
@@ -97,15 +195,16 @@ export default function InstitucionalPage() {
           nome: form.get("nome"),
           descricao: form.get("descricao") || null,
           unidade_id: form.get("unidade_id"),
-          demanda_id: form.get("demanda_id") || null,
+          ...corpoDaClassificacao(classificacao, demandas),
         }),
       });
       setMensagem("Serviço cadastrado.");
       setModalServico(false);
-      event.currentTarget.reset();
+      formulario.reset();
+      setClassificacao(SEM_CLASSIFICACAO);
       await carregar();
-    } catch {
-      setMensagem("Não foi possível cadastrar o serviço. Confira unidade e nome.");
+    } catch (error) {
+      setMensagem(mensagemDaApi(error, "Não foi possível cadastrar o serviço. Confira unidade e nome."));
     } finally {
       setSalvando(false);
     }
@@ -187,6 +286,7 @@ export default function InstitucionalPage() {
                   <th>Serviço</th>
                   <th>Unidade</th>
                   <th>Categoria</th>
+                  <th aria-label="Ações" />
                 </tr>
               </thead>
               <tbody>
@@ -197,7 +297,21 @@ export default function InstitucionalPage() {
                       {servico.descricao && <small className="block text-meta-slate">{servico.descricao}</small>}
                     </td>
                     <td>{servico.unidade_nome}</td>
-                    <td>{servico.demanda_nome ?? "Sem categoria"}</td>
+                    <td>
+                      {servico.demanda_nome ?? "Sem categoria"}
+                      {servico.demanda_nome === CATEGORIA_DE_BENEFICIO && (
+                        <small className="block text-meta-slate">
+                          {servico.tipo_de_beneficio_rotulo ?? "Tipo de auxílio não informado"}
+                        </small>
+                      )}
+                    </td>
+                    <td>
+                      {podeClassificar(servico) && (
+                        <SecondaryButton type="button" className="h-9 px-3 text-xs" onClick={() => abrirClassificacao(servico)}>
+                          Classificar
+                        </SecondaryButton>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -283,14 +397,7 @@ export default function InstitucionalPage() {
                 ))}
               </Select>
             </Field>
-            <Field label="Categoria municipal">
-              <Select name="demanda_id">
-                <option value="">Sem categoria</option>
-                {demandas.map((demanda) => (
-                  <option key={demanda.id} value={demanda.id}>{demanda.nome}</option>
-                ))}
-              </Select>
-            </Field>
+            <CamposDeClassificacao demandas={demandas} valor={classificacao} onChange={setClassificacao} />
             <Field label="Descrição">
               <textarea className="input" name="descricao" placeholder="Descrição curta do serviço" />
             </Field>
@@ -303,6 +410,30 @@ export default function InstitucionalPage() {
                 <Wrench size={18} />
                 {salvando ? "Salvando..." : "Cadastrar serviço"}
               </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editando !== null} onOpenChange={(aberto) => { if (!aberto) setEditando(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Classificar serviço</DialogTitle>
+            <DialogDescription>
+              {editando ? `${editando.nome} — ${editando.unidade_nome}. ` : ""}
+              A categoria liga o serviço ao controle de repetição de auxílio.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form className="grid gap-4" onSubmit={salvarClassificacao}>
+            {erroDaEdicao && <div className="notice" role="alert">{erroDaEdicao}</div>}
+            <CamposDeClassificacao demandas={demandas} valor={edicao} onChange={setEdicao} />
+
+            <DialogFooter>
+              <SecondaryButton type="button" onClick={() => setEditando(null)} disabled={salvando}>
+                Cancelar
+              </SecondaryButton>
+              <Button disabled={salvando}>{salvando ? "Salvando..." : "Salvar classificação"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

@@ -183,6 +183,12 @@ class Servico(models.Model):
         'institucional.Demanda', models.SET_NULL, db_column='demandId',
         blank=True, null=True, related_name='servicos',
     )
+    # Que auxílio este serviço concede, quando é um auxílio (um valor de
+    # `BeneficioEventual.Tipo`, fora "Outros"). O nome do serviço é texto livre e
+    # não diz ao balcão se "Auxílio maternidade" é um auxílio de nascimento — e é o
+    # tipo que decide quanto tempo a repetição conta (ver `atendimentos.duplicidade`).
+    # Só vale em serviço da demanda "Benefício Eventual".
+    tipo_de_beneficio = models.TextField(db_column='benefitType', blank=True, null=True)
     ativo = models.BooleanField(db_column='isActive', default=True)
     criado_em = models.DateTimeField(db_column='createdAt', auto_now_add=True)
     atualizado_em = models.DateTimeField(db_column='updatedAt', auto_now=True)

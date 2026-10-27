@@ -76,7 +76,11 @@ export type Servico = {
   descricao?: string | null;
   unidade: string;
   unidade_nome: string;
+  demanda_id?: string | null;
   demanda_nome?: string | null;
+  /** Que auxílio o serviço concede, quando é um auxílio (só na categoria "Benefício Eventual"). */
+  tipo_de_beneficio?: string | null;
+  tipo_de_beneficio_rotulo?: string | null;
   ativo?: boolean;
 };
 

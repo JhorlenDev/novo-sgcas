@@ -23,11 +23,14 @@ from apps.atendimentos.models import (
 )
 from apps.atendimentos.models import Encaminhamento
 from apps.auditoria.models import RegistroDeAuditoria
+from apps.institucional.models import Servico
 from testes.base import CenarioBase
 from testes.test_encaminhamento_chegada import _Chegada
 
 CESTA = {'tipo': 'SITUACAO_VULNERABILIDADE_TEMPORARIA', 'descricao': 'Cesta básica'}
 JUSTIFICATIVA = 'Família numerosa, a cesta anterior acabou em uma semana.'
+NASCIMENTO = 'SITUACAO_NASCIMENTO'
+UM_ANO = 'nos últimos 12 meses'
 
 
 class _Duplicidade(CenarioBase):
@@ -43,6 +46,13 @@ class _Duplicidade(CenarioBase):
 
     def total(self):
         return BeneficioEventual.objects.filter(cidadao=self.cidadao).count()
+
+    def nascimento(self, operador=None, **mudancas):
+        return self.beneficio(operador or self.tecnico, tipo=NASCIMENTO, descricao='Auxílio maternidade', **mudancas)
+
+    def nascimento_ha(self, dias):
+        self.assertEqual(self.nascimento().status_code, 201)
+        BeneficioEventual.objects.update(criado_em=timezone.now() - timedelta(days=dias))
 
     def recepcao(self, operador=None, **mudancas):
         corpo = {
@@ -339,6 +349,92 @@ class PreviaDoAviso(_Duplicidade):
             self.assertNotIn(chave, alerta)
 
 
+class PedidoNaRecepcaoDeServicoComTipo(_Duplicidade):
+    """O serviço que diz o tipo de auxílio leva a janela do tipo para o balcão."""
+
+    def servico_de_nascimento(self):
+        Servico.objects.filter(id=self.servico.id).update(tipo_de_beneficio=NASCIMENTO)
+
+    def test_o_balcao_aplica_a_janela_de_um_ano_ao_servico_de_nascimento(self):
+        self.servico_de_nascimento()
+        self.nascimento_ha(200)
+
+        resposta = self.recepcao()
+        self.assertEqual(resposta.status_code, 409, resposta.content)
+        alerta = resposta.json()['duplicidade'][0]
+        self.assertEqual((alerta['unidade'], alerta['periodo']), ('CRAS Centro', UM_ANO))
+        self.assertIn(UM_ANO, resposta.json()['detalhe'])
+        self.assertFalse(AtendimentoDeRecepcao.objects.filter(cidadao=self.cidadao).exists())
+
+    def test_sem_o_tipo_no_servico_o_balcao_continua_pelo_mes(self):
+        self.nascimento_ha(200)
+        self.assertEqual(self.recepcao().status_code, 201)
+
+    def test_com_justificativa_a_visita_segue(self):
+        self.servico_de_nascimento()
+        self.nascimento_ha(200)
+        resposta = self.recepcao(justificativa_duplicidade=JUSTIFICATIVA)
+        self.assertEqual(resposta.status_code, 201, resposta.content)
+        self.assertEqual(AtendimentoDeRecepcao.objects.get(cidadao=self.cidadao).justificativa_duplicidade, JUSTIFICATIVA)
+
+    def test_o_aviso_a_outra_unidade_diz_o_periodo(self):
+        self.servico_de_nascimento()
+        self.nascimento_ha(200)
+        self.recepcao(justificativa_duplicidade=JUSTIFICATIVA)
+        mensagem = [a['mensagem'] for a in self.como(self.tecnico).get('/api/notices/').json()
+                    if a['tipo'] == 'BENEFICIO_REPETIDO'][0]
+        self.assertIn(UM_ANO, mensagem)
+        self.assertIn('atendeu novamente o pedido', mensagem)
+
+    def test_com_mais_de_um_ano_o_pedido_passa(self):
+        self.servico_de_nascimento()
+        self.nascimento_ha(400)
+        self.assertEqual(self.recepcao().status_code, 201)
+
+    def test_o_servico_de_nascimento_so_estende_o_auxilio_de_nascimento(self):
+        # Uma cesta de 200 dias atrás não é o mesmo auxílio.
+        self.servico_de_nascimento()
+        self.assertEqual(self.beneficio(self.tecnico).status_code, 201)
+        BeneficioEventual.objects.update(criado_em=timezone.now() - timedelta(days=200))
+        self.assertEqual(self.recepcao().status_code, 201)
+
+    def test_o_servico_de_outro_tipo_nao_ganha_a_janela_de_um_ano(self):
+        Servico.objects.filter(id=self.servico.id).update(tipo_de_beneficio='SITUACAO_VULNERABILIDADE_TEMPORARIA')
+        self.nascimento_ha(200)
+        self.assertEqual(self.recepcao().status_code, 201)
+
+    def test_o_que_e_do_mes_continua_avisando_e_o_periodo_e_o_do_servico(self):
+        self.servico_de_nascimento()
+        self.cesta_no_centro()
+        self.assertEqual(self.nascimento().status_code, 201)
+
+        alertas = self.recepcao().json()['duplicidade']
+        self.assertEqual(len(alertas), 2)                              # a cesta e o nascimento, cada um uma vez
+        self.assertEqual({a['periodo'] for a in alertas}, {UM_ANO})
+
+    def test_pedido_antigo_encaminhado_a_fila_nao_conta_alem_do_mes(self):
+        # Só o benefício concedido tem a janela de um ano: um pedido que ficou na fila,
+        # sem virar benefício, não trava a pessoa por um ano.
+        self.servico_de_nascimento()
+        self.assertEqual(self.recepcao().status_code, 201)
+        AtendimentoDeRecepcao.objects.update(criado_em=timezone.now() - timedelta(days=200))
+        self.assertEqual(self.recepcao().status_code, 201)
+
+    def test_a_previa_para_o_servico_usa_a_janela_do_tipo(self):
+        self.servico_de_nascimento()
+        self.nascimento_ha(200)
+        previa = self.como(self.recepcionista).get(
+            f'/api/citizens/{self.cidadao.id}/duplicidade?servico_id={self.servico.id}').json()
+        self.assertTrue(previa['exige_justificativa'])
+        self.assertEqual(previa['alertas'][0]['periodo'], UM_ANO)
+
+    def test_servico_que_nao_e_de_beneficio_continua_sem_controle(self):
+        # O tipo só vale com a categoria: sem ela o serviço não entra no controle.
+        Servico.objects.filter(id=self.servico.id).update(tipo_de_beneficio=NASCIMENTO, demanda=None)
+        self.nascimento_ha(1)
+        self.assertEqual(self.recepcao().status_code, 201)
+
+
 class JanelaDoMes(_Duplicidade):
     def test_o_inicio_da_janela_e_o_primeiro_dia_do_mes_no_fuso_local(self):
         inicio = duplicidade.inicio_do_mes()
@@ -355,23 +451,12 @@ class JanelaDoMes(_Duplicidade):
         self.assertEqual(self.beneficio(self.coordenador).status_code, 201)
 
 
-NASCIMENTO = 'SITUACAO_NASCIMENTO'
-UM_ANO = 'nos últimos 12 meses'
-
-
 def _manaus(ano, mes, dia, hora=10):
     return timezone.make_aware(datetime(ano, mes, dia, hora, 0))
 
 
 class JanelaDeUmAno(_Duplicidade):
     """O auxílio de nascimento é uma vez por ano; os demais, uma vez por mês."""
-
-    def nascimento(self, operador=None, **mudancas):
-        return self.beneficio(operador or self.tecnico, tipo=NASCIMENTO, descricao='Auxílio maternidade', **mudancas)
-
-    def nascimento_ha(self, dias):
-        self.assertEqual(self.nascimento().status_code, 201)
-        BeneficioEventual.objects.update(criado_em=timezone.now() - timedelta(days=dias))
 
     def test_nascimento_de_meses_atras_ainda_exige_justificativa(self):
         self.nascimento_ha(150)
@@ -436,7 +521,7 @@ class JanelaDeUmAno(_Duplicidade):
         self.assertIn('neste mês', mensagem)
 
     def test_o_pedido_no_balcao_continua_pela_janela_do_mes(self):
-        # O serviço não diz que tipo de auxílio é: no balcão só o que é do mês avisa.
+        # Sem o tipo informado no serviço, o balcão não sabe que auxílio é: só o que é do mês avisa.
         self.nascimento_ha(200)
         self.assertEqual(self.recepcao().status_code, 201)
 

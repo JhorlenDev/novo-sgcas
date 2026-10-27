@@ -14,9 +14,10 @@ uma vez por ano: para ele a janela são os últimos 12 meses.
 
 O controle no balcão vale para os serviços ligados à demanda "Benefício
 Eventual". Um serviço que seja um auxílio mas não esteja ligado a essa categoria
-não é controlado — a categoria é cadastrada na tela Institucional. Como o
-serviço não diz que tipo de auxílio é, o balcão só enxerga o que é do mês; a
-regra de um ano vale onde o tipo é conhecido: no registro do benefício e na prévia.
+não é controlado — a categoria é cadastrada na tela Institucional. O nome do
+serviço não diz que tipo de auxílio é; quem o cadastra informa o tipo
+(`Servico.tipo_de_beneficio`), e é por ele que o balcão aplica a regra de um ano.
+Sem o tipo, o balcão só enxerga o que é do mês.
 """
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ from datetime import date, datetime, time, timedelta
 from rest_framework import status
 from rest_framework.response import Response
 
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.atendimentos import encaminhamentos
@@ -121,6 +123,11 @@ def alertas_para_servico(cidadao, servico, ignorar_caso_id: str | None = None) -
     encaminhados à fila de alguma unidade — que talvez ainda nem tenham virado
     benefício.
 
+    Quando o serviço diz o tipo de auxílio que concede e esse tipo vale uma vez por
+    ano, entra também o benefício do mesmo tipo concedido nos últimos 12 meses. Só
+    o concedido: um pedido que ficou na fila sem virar benefício não trava a
+    pessoa por um ano.
+
     `ignorar_caso_id` é o caso de um encaminhamento entre unidades que a pessoa
     está cumprindo agora: a visita que o originou é o mesmo atendimento, não uma
     repetição dele.
@@ -129,10 +136,15 @@ def alertas_para_servico(cidadao, servico, ignorar_caso_id: str | None = None) -
         return []
 
     inicio = inicio_do_mes()
+    tipo = servico.tipo_de_beneficio
+    periodo = periodo_do(tipo)
+    no_periodo = Q(criado_em__gte=inicio)
+    if tipo in TIPOS_DE_UMA_VEZ_POR_ANO:
+        no_periodo |= Q(tipo=tipo, criado_em__gte=inicio_da_janela(tipo))
     alertas = [
-        _de_beneficio(b, PERIODO_DO_MES)
+        _de_beneficio(b, periodo)
         for b in (
-            BeneficioEventual.vigentes.filter(cidadao=cidadao, criado_em__gte=inicio)
+            BeneficioEventual.vigentes.filter(no_periodo, cidadao=cidadao)
             .select_related('unidade').order_by('criado_em')
         )
     ]
@@ -159,7 +171,7 @@ def alertas_para_servico(cidadao, servico, ignorar_caso_id: str | None = None) -
             'unidade_id': v.unidade_id,
             'o_que': f'Atendimento: {v.demanda}',
             'detalhe': 'Encaminhado para a fila',
-            'periodo': PERIODO_DO_MES,
+            'periodo': periodo,
         }
         for v in visitas
     ]
