@@ -142,7 +142,7 @@ class ChegadaCumpreOEncaminhamento(_Chegada):
         self.chegar(enc)
         chamado = self.no_destino('/api/queues/chamar-proximo').json()
         self.assertEqual(chamado['caso']['id'], caso_id)
-        self.assertIn('violência doméstica', Caso.objects.get(pk=caso_id).descricao)     # a ficha chegou
+        self.assertIn('violência doméstica', chamado['encaminhamento_recebido']['motivo'])     # a ficha chegou
 
         resposta = self.no_destino(
             f'/api/cases/{caso_id}/concluir', {'situacao': 'CONCLUIDO', 'relato': 'Acompanhamento iniciado'},

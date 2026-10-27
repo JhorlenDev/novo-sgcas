@@ -181,10 +181,12 @@ def criar(*, caso: Caso, operador, destino, destino_externo: str, dados: dict, a
 
     rotulo_da_categoria = Encaminhamento.Categoria(dados['categoria_do_motivo']).label
     rotulo_da_urgencia = Caso.Prioridade(dados['urgencia']).label.lower()
+    # O relato do caso é lido também pela recepção (histórico municipal, /api/cases/).
+    # Entra só o que a recepção pode saber — para onde, categoria e urgência; o motivo
+    # e o resumo ficam no encaminhamento, que só a equipe técnica lê.
     acrescentar_ao_relato(
         caso, operador, agora,
-        f'Encaminhado para {nome_do_destino} ({rotulo_da_categoria}, urgência {rotulo_da_urgencia}). '
-        f'Motivo: {dados["motivo"]}',
+        f'Encaminhado para {nome_do_destino} ({rotulo_da_categoria}, urgência {rotulo_da_urgencia}).',
     )
 
     caso.situacao = Caso.Situacao.ENCAMINHADO
@@ -271,9 +273,11 @@ def recusar(enc: Encaminhamento, operador, motivo: str, agora) -> None:
     enc.atualizado_em = agora
     enc.save()
 
+    # O motivo da recusa fica na resposta do encaminhamento (equipe técnica), não no
+    # relato do caso, que a recepção também lê.
     acrescentar_ao_relato(
         caso, operador, agora,
-        f'Encaminhamento recusado por {caso.unidade.nome}. Motivo: {motivo.strip()}',
+        f'Encaminhamento recusado por {caso.unidade.nome}. O motivo está na ficha do encaminhamento.',
     )
     caso.unidade_id = enc.unidade_origem_id
     caso.situacao = Caso.Situacao.EM_ATENDIMENTO

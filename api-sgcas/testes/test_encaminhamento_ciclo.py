@@ -99,7 +99,7 @@ class Recusar(_Ciclo):
         caso = Caso.objects.get(pk=caso_id)
         self.assertEqual(caso.unidade_id, self.sul.id)                    # voltou para quem encaminhou
         self.assertEqual(caso.situacao, Caso.Situacao.EM_ATENDIMENTO)     # e está aberto para agir
-        self.assertIn('Fora do perfil do CRAS Centro', caso.descricao)
+        self.assertIn('Encaminhamento recusado por CRAS Centro', caso.descricao)
 
     def test_exige_o_motivo(self):
         _, enc = self.enviar()
