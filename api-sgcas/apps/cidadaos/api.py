@@ -167,7 +167,7 @@ def prontuario(request, cidadao_id: str):
     )
     encaminhamentos = (
         Encaminhamento.objects.filter(caso__cidadao=cidadao)
-        .select_related('caso', 'unidade_destino', 'encaminhado_por')
+        .select_related('caso__cidadao', 'unidade_origem', 'unidade_destino', 'encaminhado_por', 'respondido_por')
         .order_by('-criado_em')[:50]
     )
     senhas = (
@@ -539,7 +539,12 @@ def verificar_duplicidade(request, cidadao_id: str):
         servico = Servico.objects.filter(id=servico_id, ativo=True).select_related('demanda').first()
         if servico is None:
             return Response({'servico_id': 'Serviço não encontrado'}, status=status.HTTP_400_BAD_REQUEST)
-        alertas = duplicidade.alertas_para_servico(cidadao, servico)
+        # Cumprindo um encaminhamento desta pessoa, a visita que o originou não é
+        # repetição — a prévia tem de responder o que o registro vai responder.
+        cumprindo = Encaminhamento.objects.filter(id=request.query_params.get('encaminhamento_id') or '').first()
+        alertas = duplicidade.alertas_para_servico(
+            cidadao, servico, ignorar_caso_id=cumprindo.caso_id if cumprindo else None,
+        )
     elif tipo:
         if tipo not in BeneficioEventual.Tipo.values:
             return Response({'tipo': 'Tipo de benefício inválido'}, status=status.HTTP_400_BAD_REQUEST)

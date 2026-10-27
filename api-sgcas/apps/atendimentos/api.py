@@ -23,6 +23,7 @@ from apps.atendimentos.serializers import (
     AtendimentoDeRecepcaoSerializer,
     CasoSerializer,
     ConclusaoSerializer,
+    EncaminhamentoDetalheSerializer,
     EncaminhamentoResumoSerializer,
     EncaminhamentoSerializer,
     NaoCompareceuSerializer,
@@ -405,13 +406,35 @@ def _senha_atual(operador):
     )
 
 
+def _encaminhamento_recebido(caso, operador):
+    """
+    O encaminhamento que trouxe este caso a esta unidade, com a ficha.
+
+    É o que o técnico do destino precisa ter diante dos olhos ao chamar a pessoa:
+    de onde veio, por quê, o que já recebeu. É o encaminhamento *deste caso* para
+    esta unidade: o recusado devolveu o caso à origem e não é mais o que a pessoa
+    trouxe.
+    """
+    if caso is None or operador.unidade_id is None:
+        return None
+    return (
+        Encaminhamento.objects
+        .filter(caso=caso, unidade_destino_id=operador.unidade_id)
+        .exclude(situacao=Encaminhamento.Situacao.RECUSADO)
+        .select_related('caso__cidadao', 'unidade_origem', 'unidade_destino', 'encaminhado_por', 'respondido_por')
+        .order_by('-criado_em').first()
+    )
+
+
 def _montar_atendimento(senha, operador):
     cidadao = senha.cidadao
     caso = _caso_da_senha(senha)
+    recebido = _encaminhamento_recebido(caso, operador)
     return {
         'senha': SenhaSerializer(senha).data,
         'cidadao': CidadaoSerializer(cidadao).data,
         'caso': CasoSerializer(caso).data if caso else None,
+        'encaminhamento_recebido': EncaminhamentoDetalheSerializer(recebido).data if recebido else None,
         'historico': EntradaDoHistoricoSerializer(
             historico.do_cidadao(cidadao, operador), many=True
         ).data,

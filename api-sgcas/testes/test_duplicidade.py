@@ -264,9 +264,7 @@ class PedidoNaRecepcao(_Duplicidade):
         )
 
 
-class ChegadaPorEncaminhamento(_Chegada):
-    """Cumprir um encaminhamento entre unidades não é repetir o atendimento que o originou."""
-
+class _PedidoDoSulAoCentro(_Chegada):
     def pedido_no_sul_encaminhado_ao_centro(self):
         visita = self.como(self.recepcionista).post(
             '/api/reception/atendimento',
@@ -278,6 +276,10 @@ class ChegadaPorEncaminhamento(_Chegada):
         caso_id = visita.json()['caso']['id']
         self.assertEqual(self.encaminhar(caso_id).status_code, 201)
         return Encaminhamento.objects.get(caso_id=caso_id)
+
+
+class ChegadaPorEncaminhamento(_PedidoDoSulAoCentro):
+    """Cumprir um encaminhamento entre unidades não é repetir o atendimento que o originou."""
 
     def test_a_visita_que_originou_o_encaminhamento_nao_e_repeticao(self):
         enc = self.pedido_no_sul_encaminhado_ao_centro()
