@@ -257,7 +257,7 @@ export default function RecepcaoPage() {
         title="Recepção"
         description="Busque a pessoa, confira o histórico e registre a chegada ou o encaminhamento para o atendimento."
         action={
-          <Link href="/cidadaos/novo" className="button secondary">
+          <Link href="/cidadaos/novo" className="button">
             <UserPlus size={16} aria-hidden="true" />
             Novo cidadão
           </Link>
