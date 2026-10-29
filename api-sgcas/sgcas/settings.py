@@ -5,6 +5,7 @@ O banco e o mesmo que o backend anterior usa: nao ha migracao de dados, e os
 modelos sao escritos sobre as tabelas existentes com `db_table`. Por isso o
 Django nao gerencia o esquema — `managed = False` nos modelos de dominio.
 """
+import warnings
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -221,6 +222,17 @@ PRECADASTRO_CLIENT_SECRET = env('PRECADASTRO_CLIENT_SECRET', default='')
 PII_ENCRYPTION_ENABLED = env.bool('PII_ENCRYPTION_ENABLED', default=False)
 PII_ENCRYPTION_KEY = env('PII_ENCRYPTION_KEY', default='')
 PII_HMAC_KEY = env('PII_HMAC_KEY', default='')
+
+if not DEBUG and not PII_ENCRYPTION_ENABLED:
+    # Não derruba o boot: ligar a cifragem exige chaves e, numa base com cadastros, o
+    # comando `cifrar_dados_pessoais`. Mas subir assim deixa CPF, RG e e-mail em texto
+    # puro no banco, e isso não pode passar em silêncio.
+    warnings.warn(
+        'PII_ENCRYPTION_ENABLED está desligado: os dados pessoais dos cidadãos ficam em texto '
+        'puro no banco. Em produção ligue-o (veja o .env.example e o README).',
+        RuntimeWarning,
+        stacklevel=1,
+    )
 
 KEYCLOAK_URL = env('KEYCLOAK_URL', default='')
 KEYCLOAK_REALM = env('KEYCLOAK_REALM', default='')

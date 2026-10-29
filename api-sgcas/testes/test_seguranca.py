@@ -345,3 +345,83 @@ class ChaveSecretaDeProducao(CenarioBase):
     def test_em_desenvolvimento_a_chave_de_exemplo_vale(self):
         resultado = _importar_settings(DEBUG='True', DJANGO_SECRET_KEY='CHAVE_SECRETA_AQUI')
         self.assertEqual(resultado.returncode, 0, resultado.stderr)
+
+
+class LogsNaoGuardamCredenciais(_Navegador):
+    """A chave da sessão é o que autentica: quem lê o log não pode levá-la dali."""
+
+    def test_inicio_do_login_nao_registra_a_chave_da_sessao(self):
+        navegador = self.navegador()
+        with self.assertLogs('apps.contas.views', level='INFO') as registros:
+            navegador.get('/api/auth/keycloak/login')
+        chave = navegador.session.session_key
+        self.assertTrue(chave)
+        self.assertNotIn(chave, ' '.join(registros.output))
+
+    def test_retorno_recusado_nao_registra_a_chave(self):
+        navegador = self.navegador()
+        navegador.get('/api/auth/keycloak/login')
+        chave = navegador.session.session_key
+        with self.assertLogs('apps.contas.views', level='WARNING') as registros:
+            navegador.get('/api/auth/keycloak/callback?state=errado')
+            navegador.get('/api/auth/keycloak/login')
+            navegador.get('/api/auth/keycloak/callback?state=' + navegador.session['kc_state'])     # sem código
+        self.assertNotIn(chave, ' '.join(registros.output))
+        self.assertTrue(registros.output)
+
+
+class LeiturasSensiveisSaoAuditadas(CenarioBase):
+    """
+    O relato de um caso e a ficha de um encaminhamento são dado sensível (violência,
+    saúde): quem os abriu tem de constar na trilha, como já consta quem abriu o prontuário.
+    """
+
+    def _leituras(self):
+        from apps.auditoria.models import RegistroDeAuditoria
+        return RegistroDeAuditoria.objects.filter(acao='READ').count()
+
+    def test_casos(self):
+        antes = self._leituras()
+        self.assertEqual(self.como(self.tecnico).get('/api/cases/').status_code, 200)
+        self.assertEqual(self._leituras(), antes + 1)
+
+    def test_encaminhamentos(self):
+        antes = self._leituras()
+        self.assertEqual(self.como(self.tecnico).get('/api/referrals/recebidos').status_code, 200)
+        self.assertEqual(self._leituras(), antes + 1)
+
+    def test_o_que_nao_e_sensivel_continua_fora_da_trilha(self):
+        antes = self._leituras()
+        self.como(self.tecnico).get('/api/institutional/units')
+        self.como(self.tecnico).get('/api/notices/resumo')
+        self.assertEqual(self._leituras(), antes)
+
+
+class AnexoNaoSaiDaPasta(CenarioBase):
+    def test_caminho_fora_da_pasta_do_cidadao_e_recusado(self):
+        from apps.cidadaos import anexos
+        with mock.patch.object(anexos, '_pasta', return_value=Path('/tmp/pasta-do-cidadao')):
+            Path('/tmp/pasta-do-cidadao').mkdir(exist_ok=True)
+            Path('/tmp/pasta-do-cidadao-irma').mkdir(exist_ok=True)
+            Path('/tmp/pasta-do-cidadao-irma/segredo.jpg').write_bytes(b'x')
+            # A pasta irmã tem o nome da pasta como prefixo: uma checagem por texto a aceitaria.
+            with self.assertRaises(anexos.ErroDeAnexo):
+                anexos.caminho(str(uuid.uuid4()), {'arquivo': '../pasta-do-cidadao-irma/segredo.jpg'})
+
+
+class AvisoDeCifraEmProducao(CenarioBase):
+    """Sem cifragem, CPF, RG e e-mail ficam em texto puro no banco: o boot avisa, alto."""
+
+    def test_producao_sem_cifragem_avisa(self):
+        resultado = _importar_settings(DEBUG='False', DJANGO_SECRET_KEY='k' * 60, PII_ENCRYPTION_ENABLED='false')
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+        self.assertIn('PII_ENCRYPTION_ENABLED', resultado.stderr)
+
+    def test_producao_com_cifragem_nao_avisa(self):
+        resultado = _importar_settings(DEBUG='False', DJANGO_SECRET_KEY='k' * 60, PII_ENCRYPTION_ENABLED='true')
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+        self.assertNotIn('PII_ENCRYPTION_ENABLED', resultado.stderr)
+
+    def test_desenvolvimento_nao_avisa(self):
+        resultado = _importar_settings(DEBUG='True', PII_ENCRYPTION_ENABLED='false')
+        self.assertNotIn('PII_ENCRYPTION_ENABLED', resultado.stderr)

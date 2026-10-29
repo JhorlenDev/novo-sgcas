@@ -32,7 +32,7 @@ def login(request):
     """Manda a pessoa ao Tefé Cidadão, guardando o `state` na sessão."""
     state = secrets.token_urlsafe(32)
     request.session[CHAVE_STATE] = state
-    logger.info('Login SGCAS iniciado via Keycloak. session_key=%s', request.session.session_key)
+    logger.info('Login SGCAS iniciado via Keycloak.')
     return HttpResponseRedirect(keycloak.url_de_login(state, _redirect_uri()))
 
 
@@ -51,16 +51,12 @@ def callback(request):
 
     esperado = request.session.pop(CHAVE_STATE, None)
     if not esperado or esperado != request.GET.get('state'):
-        logger.warning(
-            'Callback Keycloak recusado: state invalido. tinha_state=%s session_key=%s',
-            bool(esperado),
-            request.session.session_key,
-        )
+        logger.warning('Callback Keycloak recusado: state invalido. tinha_state=%s', bool(esperado))
         return HttpResponseRedirect(_frontend('/login?erro=estado-invalido'))
 
     codigo = request.GET.get('code')
     if not codigo:
-        logger.warning('Callback Keycloak recusado: sem codigo. session_key=%s', request.session.session_key)
+        logger.warning('Callback Keycloak recusado: sem codigo.')
         return HttpResponseRedirect(_frontend('/login?erro=sem-codigo'))
 
     claims = {}

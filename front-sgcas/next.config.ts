@@ -1,6 +1,24 @@
 import type { NextConfig } from "next";
 
+// O modo de desenvolvimento do React usa `eval` (mapas de origem, recarga a quente); a
+// versão de produção não. Permitir `eval` onde não é preciso só enfraquece a política:
+// com ele, um script injetado ganharia um jeito a mais de rodar texto como código.
+const emDesenvolvimento = process.env.NODE_ENV !== "production";
+const politicaDeConteudo = [
+  "default-src 'self'",
+  `script-src 'self' 'unsafe-inline'${emDesenvolvimento ? " 'unsafe-eval'" : ""}`,
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
+
 const nextConfig: NextConfig = {
+  // Não anuncia o framework (e a versão) em toda resposta.
+  poweredByHeader: false,
   allowedDevOrigins: ["192.168.88.180"],
   trailingSlash: true,
   skipTrailingSlashRedirect: true,
@@ -25,7 +43,7 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
-          { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" },
+          { key: "Content-Security-Policy", value: politicaDeConteudo },
         ],
       },
     ];

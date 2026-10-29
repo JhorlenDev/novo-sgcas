@@ -25,7 +25,11 @@ logger = logging.getLogger(__name__)
 # Auditar todo GET encheria a trilha de consulta a lista de unidades e catálogo
 # de demandas, e a informação que importa — quem abriu o prontuário de fulano —
 # ficaria enterrada no ruído.
-LEITURAS_AUDITADAS = ('/api/citizens', '/api/reception', '/api/queues/chamar-proximo')
+LEITURAS_AUDITADAS = (
+    '/api/citizens', '/api/reception', '/api/queues/chamar-proximo',
+    # O relato do caso e a ficha do encaminhamento: dado sensível (violência, saúde).
+    '/api/cases', '/api/referrals',
+)
 
 # Fora da trilha: o próprio módulo de auditoria (evita recursão) e o fluxo de
 # autenticação, cujos corpos carregam token.

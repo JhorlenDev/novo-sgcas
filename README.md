@@ -333,6 +333,8 @@ O modelo completo está em [`api-sgcas/.env.example`](api-sgcas/.env.example).
 | `DATABASE_URL` | Conexão PostgreSQL da API local |
 | `FRONTEND_URL` | Destino do navegador após autenticação e origem aceita pela proteção CSRF; em produção, a origem pública com `https` |
 | `CORS_ORIGIN` | Configuração lida pelo projeto; o fluxo do frontend usa proxy de mesma origem |
+| `SESSION_MAX_LIFETIME` | Vida máxima da sessão desde o login, em segundos, mesmo com uso contínuo (padrão `43200`, 12 horas) |
+| `CSRF_TRUSTED_ORIGINS_EXTRAS` | Outros endereços pelos quais o front é aberto (por exemplo, o IP da rede num teste), separados por vírgula. Toda escrita confere o token CSRF e a origem do navegador |
 | `KEYCLOAK_*` | Configuração de identidade, cliente e callback |
 | `LOCAL_STORAGE_PATH` | Diretório persistente de anexos |
 | `TRUSTED_PROXIES` | Quantos proxies reversos (nginx etc., na frente do Next) acrescentam o IP do cliente ao `X-Forwarded-For`; o Next não acrescenta. Padrão: `0` com `DEBUG=True` e `1` com `DEBUG=False`. Define o IP usado no limite de requisições e na auditoria |

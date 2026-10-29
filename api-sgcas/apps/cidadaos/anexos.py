@@ -213,7 +213,7 @@ def caminho(cidadao_id: str, anexo: dict, miniatura: bool = False) -> Path:
 
     pasta = _pasta(cidadao_id).resolve()
     destino = (pasta / Path(nome).name).resolve()
-    if not str(destino).startswith(str(pasta)):
+    if not destino.is_relative_to(pasta):
         raise ErroDeAnexo('Caminho de anexo inválido')
     if not destino.exists():
         raise ErroDeAnexo('Arquivo não encontrado no armazenamento')
