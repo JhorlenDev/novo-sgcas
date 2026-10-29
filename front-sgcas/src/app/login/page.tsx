@@ -85,15 +85,15 @@ function LoginContent() {
             </div>
           </div>
 
-          <div className="mx-auto w-full max-w-2xl text-center">
+          <div className="w-full max-w-xl 2xl:max-w-2xl">
             <h1 className="!text-white text-4xl leading-[1.1] xl:text-5xl 2xl:text-6xl">
               Sistema de Gestão de Casos da Assistência Social
             </h1>
-            <p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-white/85 xl:text-xl xl:leading-9">
+            <p className="mt-6 max-w-lg text-lg leading-8 text-white/85 xl:text-xl xl:leading-9">
               O atendimento da rede socioassistencial do município, da recepção ao encaminhamento, num só cadastro.
             </p>
 
-            <ul className="mt-10 space-y-6">
+            <ul className="mt-10 space-y-5">
               {[
                 [ConciergeBell, "Recepção e fila", "Registro da chegada, senha e chamada para o atendimento."],
                 [FolderOpen, "Prontuário e acompanhamento", "Histórico de cada pessoa e de cada caso, por unidade."],
@@ -101,19 +101,19 @@ function LoginContent() {
               ].map(([Icone, titulo, texto]) => {
                 const Icon = Icone as typeof ConciergeBell;
                 return (
-                  <li key={titulo as string} className="flex flex-col items-center gap-1">
-                    <p className="flex items-center gap-2.5 text-base font-semibold xl:text-lg">
-                      <Icon className="h-5 w-5 shrink-0 text-white/85 xl:h-6 xl:w-6" aria-hidden="true" />
-                      {titulo as string}
-                    </p>
-                    <p className="max-w-md text-[15px] leading-6 text-white/85 xl:text-base">{texto as string}</p>
+                  <li key={titulo as string} className="flex gap-3">
+                    <Icon className="mt-0.5 h-5 w-5 shrink-0 text-white/85 xl:mt-1 xl:h-6 xl:w-6" aria-hidden="true" />
+                    <div>
+                      <p className="text-base font-semibold xl:text-lg">{titulo as string}</p>
+                      <p className="text-[15px] leading-6 text-white/85 xl:text-base">{texto as string}</p>
+                    </div>
                   </li>
                 );
               })}
             </ul>
           </div>
 
-          <p className="self-end text-center text-xs text-white/80">Acesso restrito a servidores autorizados.</p>
+          <p className="self-end text-xs text-white/80">Acesso restrito a servidores autorizados.</p>
         </section>
 
         <section className="flex items-center justify-center px-4 py-8 sm:px-8">
