@@ -77,32 +77,32 @@ function LoginContent() {
     <main className="min-h-screen bg-meta-warm-gray text-meta-charcoal">
       <div className="grid min-h-screen lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         {/* Apresentação: só no computador. No celular a página começa direto no acesso. */}
-        <section className="relative isolate hidden flex-col justify-between overflow-hidden bg-[hsl(213_74%_42%)] px-12 py-10 text-white lg:flex xl:px-16">
-          {/* Marca-d'água: o brasão de Tefé, centralizado e escuro, esmaecido nas bordas por uma máscara. */}
+        <section className="relative isolate hidden flex-col justify-between overflow-hidden border-r border-primary/10 bg-[hsl(213_90%_95%)] px-12 py-10 text-meta-charcoal lg:flex xl:px-16">
+          {/* O brasão de Tefé, centralizado e com as cores originais; o azul clarinho do painel o cobre como uma máscara suave. */}
           <Image
-            src="/brasao-tefe-fundo.png"
+            src="/brasao-tefe-cores.png"
             alt=""
             width={550}
             height={625}
             aria-hidden="true"
-            className="pointer-events-none absolute left-1/2 top-1/2 -z-10 w-[78%] max-w-[34rem] -translate-x-1/2 -translate-y-1/2 select-none opacity-[0.42] 2xl:max-w-[42rem]"
+            className="pointer-events-none absolute left-1/2 top-1/2 -z-10 w-[78%] max-w-[34rem] -translate-x-1/2 -translate-y-1/2 select-none opacity-[0.38] 2xl:max-w-[42rem]"
             style={{ maskImage: BRASAO_MASCARA, WebkitMaskImage: BRASAO_MASCARA }}
           />
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/15">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <Landmark className="h-5 w-5" aria-hidden="true" />
             </span>
             <div>
               <p className="text-lg font-bold leading-tight">SGCAS</p>
-              <p className="text-xs text-white/90">Prefeitura de Tefé · SEDECTI</p>
+              <p className="text-xs text-meta-slate">Prefeitura de Tefé · SEDECTI</p>
             </div>
           </div>
 
           <div className="max-w-lg">
-            <h1 className="!text-white text-3xl leading-tight xl:text-4xl">
+            <h1 className="text-3xl leading-tight xl:text-4xl">
               Sistema de Gestão de Casos da Assistência Social
             </h1>
-            <p className="mt-4 max-w-md text-[15px] leading-7 text-white/90">
+            <p className="mt-4 max-w-md text-[15px] leading-7 text-meta-charcoal">
               O atendimento da rede socioassistencial do município, da recepção ao encaminhamento, num só cadastro.
             </p>
 
@@ -115,10 +115,10 @@ function LoginContent() {
                 const Icon = Icone as typeof ConciergeBell;
                 return (
                   <li key={titulo as string} className="flex gap-3">
-                    <Icon className="mt-0.5 h-5 w-5 shrink-0 text-white/80" aria-hidden="true" />
+                    <Icon className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
                     <div>
                       <p className="text-sm font-semibold">{titulo as string}</p>
-                      <p className="text-sm leading-6 text-white/90">{texto as string}</p>
+                      <p className="text-sm leading-6 text-meta-charcoal">{texto as string}</p>
                     </div>
                   </li>
                 );
@@ -126,7 +126,7 @@ function LoginContent() {
             </ul>
           </div>
 
-          <p className="text-xs text-white/90">Acesso restrito a servidores autorizados.</p>
+          <p className="text-xs text-meta-charcoal/80">Acesso restrito a servidores autorizados.</p>
         </section>
 
         <section className="flex items-center justify-center px-4 py-8 sm:px-8">
