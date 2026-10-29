@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, ArrowLeftRight, ConciergeBell, FolderOpen, Landmark, Loader2 } from "lucide-react";
+import { ArrowRight, ArrowLeftRight, ConciergeBell, FolderOpen, Loader2 } from "lucide-react";
 import { loginWithTefeCidadao } from "@/lib/api";
 import { defaultRouteForRole, useAuth } from "@/lib/auth";
 
@@ -33,9 +33,6 @@ const errors: Record<string, { title: string; text: string }> = {
     text: "Aguarde cerca de um minuto e tente entrar outra vez.",
   },
 };
-
-// Esmaece as bordas do brasão, para ele se fundir ao azul em vez de aparecer como uma figura recortada.
-const BRASAO_MASCARA = "radial-gradient(ellipse closest-side at 50% 50%, black 55%, transparent 100%)";
 
 export default function LoginPage() {
   return (
@@ -77,32 +74,22 @@ function LoginContent() {
     <main className="min-h-screen bg-meta-warm-gray text-meta-charcoal">
       <div className="grid min-h-screen lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         {/* Apresentação: só no computador. No celular a página começa direto no acesso. */}
-        <section className="relative isolate hidden flex-col justify-between overflow-hidden border-r border-primary/10 bg-[hsl(213_90%_95%)] px-12 py-10 text-meta-charcoal lg:flex xl:px-16">
-          {/* O brasão de Tefé, centralizado e com as cores originais; o azul clarinho do painel o cobre como uma máscara suave. */}
-          <Image
-            src="/brasao-tefe-cores.png"
-            alt=""
-            width={550}
-            height={625}
-            aria-hidden="true"
-            className="pointer-events-none absolute left-1/2 top-1/2 -z-10 w-[78%] max-w-[34rem] -translate-x-1/2 -translate-y-1/2 select-none opacity-[0.38] 2xl:max-w-[42rem]"
-            style={{ maskImage: BRASAO_MASCARA, WebkitMaskImage: BRASAO_MASCARA }}
-          />
+        <section className="hidden flex-col justify-between bg-primary px-12 py-10 text-white lg:flex xl:px-16">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Landmark className="h-5 w-5" aria-hidden="true" />
+            <span className="flex h-16 w-14 shrink-0 items-center justify-center rounded-lg bg-white p-1.5">
+              <Image src="/brasao-tefe-logo.png" alt="Brasão de Tefé" width={146} height={192} className="h-full w-full object-contain" priority />
             </span>
             <div>
               <p className="text-lg font-bold leading-tight">SGCAS</p>
-              <p className="text-xs text-meta-slate">Prefeitura de Tefé · SEDECTI</p>
+              <p className="text-xs text-white/75">Prefeitura de Tefé · SEDECTI</p>
             </div>
           </div>
 
           <div className="max-w-lg">
-            <h1 className="text-3xl leading-tight xl:text-4xl">
+            <h1 className="!text-white text-3xl leading-tight xl:text-4xl">
               Sistema de Gestão de Casos da Assistência Social
             </h1>
-            <p className="mt-4 max-w-md text-[15px] leading-7 text-meta-charcoal">
+            <p className="mt-4 max-w-md text-[15px] leading-7 text-white/80">
               O atendimento da rede socioassistencial do município, da recepção ao encaminhamento, num só cadastro.
             </p>
 
@@ -115,10 +102,10 @@ function LoginContent() {
                 const Icon = Icone as typeof ConciergeBell;
                 return (
                   <li key={titulo as string} className="flex gap-3">
-                    <Icon className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                    <Icon className="mt-0.5 h-5 w-5 shrink-0 text-white/80" aria-hidden="true" />
                     <div>
                       <p className="text-sm font-semibold">{titulo as string}</p>
-                      <p className="text-sm leading-6 text-meta-charcoal">{texto as string}</p>
+                      <p className="text-sm leading-6 text-white/75">{texto as string}</p>
                     </div>
                   </li>
                 );
@@ -126,14 +113,14 @@ function LoginContent() {
             </ul>
           </div>
 
-          <p className="text-xs text-meta-charcoal/80">Acesso restrito a servidores autorizados.</p>
+          <p className="text-xs text-white/65">Acesso restrito a servidores autorizados.</p>
         </section>
 
         <section className="flex items-center justify-center px-4 py-8 sm:px-8">
           <div className="w-full max-w-[26rem]">
             <div className="mb-8 flex items-center gap-3 lg:hidden">
-              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <Landmark className="h-5 w-5" aria-hidden="true" />
+              <span className="flex h-16 w-14 shrink-0 items-center justify-center rounded-lg border border-meta-divider bg-white p-1.5">
+                <Image src="/brasao-tefe-logo.png" alt="Brasão de Tefé" width={146} height={192} className="h-full w-full object-contain" priority />
               </span>
               <div>
                 <p className="text-lg font-bold leading-tight">SGCAS</p>
