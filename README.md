@@ -344,7 +344,7 @@ O modelo completo está em [`api-sgcas/.env.example`](api-sgcas/.env.example).
 | `KEYCLOAK_*` | Configuração de identidade, cliente e callback |
 | `LOCAL_STORAGE_PATH` | Diretório persistente de anexos |
 | `TRUSTED_PROXIES` | Quantos proxies reversos (nginx etc., na frente do Next) acrescentam o IP do cliente ao `X-Forwarded-For`; o Next não acrescenta. Padrão: `0` com `DEBUG=True` e `1` com `DEBUG=False`. Define o IP usado no limite de requisições e na auditoria |
-| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Credenciais do PostgreSQL no Compose |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Credenciais do PostgreSQL no Compose. `POSTGRES_PASSWORD` **não tem valor padrão**: sem ela o Compose recusa subir. Em produção a API também recusa a senha de exemplo `change-me` |
 | `POSTGRES_PORT` | Porta local do banco no `compose.dev.yml` |
 | `API_PORT` | Porta publicada da API Docker; padrão `8000` |
 | `API_BIND_ADDRESS` | Interface em que a porta da API Docker é publicada; padrão `127.0.0.1`. Só o Next e o nginx da mesma máquina a alcançam. Nunca use `0.0.0.0` em produção |
@@ -389,9 +389,9 @@ Há também scripts de navegador em `front-sgcas/scripts/`. Eles têm requisitos
 
 ## Produção
 
-1. Configure domínios, HTTPS e proxy reverso. Use [`deploy/nginx/sgcas.conf`](deploy/nginx/sgcas.conf) como ponto de partida (testada no nginx 1.30): troque o domínio e os caminhos dos certificados, copie para `/etc/nginx/conf.d/`, rode `nginx -t` e recarregue. Com `DEBUG=False`, a API exige HTTPS e usa cookies seguros; o proxy deve encaminhar `X-Forwarded-Proto` e `X-Forwarded-For`, como essa configuração faz.
+1. Configure domínios, HTTPS e proxy reverso. Use [`deploy/nginx/sgcas.conf`](deploy/nginx/sgcas.conf) como ponto de partida (testada no nginx 1.30): troque o domínio e os caminhos dos certificados, copie para `/etc/nginx/conf.d/`, rode `nginx -t` e recarregue. A configuração também limita requisições por IP (`limit_req`) com tetos **folgados de propósito**, porque a prefeitura inteira sai por um IP só; se alguém trabalhando normalmente receber `429`, aumente `rate`/`burst` no topo do arquivo, não remova os limites. Com `DEBUG=False`, a API exige HTTPS e usa cookies seguros; o proxy deve encaminhar `X-Forwarded-Proto` e `X-Forwarded-For`, como essa configuração faz.
 2. Gere e preencha as **duas chaves da cifragem dos dados pessoais** (`PII_ENCRYPTION_KEY` e `PII_HMAC_KEY`, comando em [Cifragem de dados pessoais](#cifragem-de-dados-pessoais)): em produção a API não sobe sem elas. Preencha também segredos reais, `ALLOWED_HOSTS`, `FRONTEND_URL` e callback do Keycloak. Nunca publique `.env`. Atenção a dois valores: `ALLOWED_HOSTS` deve conter o host de `SGCAS_API_URL` (por exemplo `localhost`), **não** o domínio público, porque o Next troca o `Host` ao encaminhar para a API; e `FRONTEND_URL` deve ser a origem pública com `https` (por exemplo `https://sgcas.exemplo.gov.br`), pois também define a origem aceita pela proteção CSRF.
-3. Faça backup do PostgreSQL, dos anexos e **das chaves de cifragem, guardadas em lugar diferente do backup do banco**: sem elas os dados pessoais não podem ser recuperados.
+3. Faça backup do PostgreSQL, dos anexos (volume `armazenamento`; comandos de backup e restauração em [`api-sgcas/README.md`](api-sgcas/README.md#o-container-é-fechado-de-propósito)) e **das chaves de cifragem, guardadas em lugar diferente do backup do banco**: sem elas os dados pessoais não podem ser recuperados.
 4. Construa a API e execute as migrations **antes** de iniciar a nova versão:
 
    ```bash

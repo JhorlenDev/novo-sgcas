@@ -112,6 +112,16 @@ def _banco_do_ambiente() -> dict:
 
 DATABASES = {'default': _banco_do_ambiente()}
 
+# A senha do `.env.example` (e a que o Compose usava por padrao) e publica. Em producao um
+# banco com ela entrega todos os cadastros a quem alcancar a porta do Postgres, entao o boot
+# recusa, como faz com a chave secreta de exemplo.
+_SENHAS_DE_EXEMPLO_DO_BANCO = {'change-me'}
+if not DEBUG and (DATABASES['default'].get('PASSWORD') or '').lower() in _SENHAS_DE_EXEMPLO_DO_BANCO:
+    raise RuntimeError(
+        'A senha do banco em DATABASE_URL (e em POSTGRES_PASSWORD) é a de exemplo. Defina uma '
+        'própria em produção. Gere com: python -c "import secrets; print(secrets.token_urlsafe(24))"'
+    )
+
 AUTH_PASSWORD_VALIDATORS = []
 
 LANGUAGE_CODE = 'pt-br'

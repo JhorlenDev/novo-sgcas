@@ -410,6 +410,38 @@ class AnexoNaoSaiDaPasta(CenarioBase):
                 anexos.caminho(str(uuid.uuid4()), {'arquivo': '../pasta-do-cidadao-irma/segredo.jpg'})
 
 
+class SenhaDoBancoEmProducao(CenarioBase):
+    """
+    O Compose já exige uma senha; a API também recusa a de exemplo, para o caso de o banco vir de
+    outro lugar. Banco sem senha não é barrado: autenticação por socket (peer) é válida.
+    """
+
+    CIFRA = {'PII_ENCRYPTION_ENABLED': 'false'}
+
+    def test_senha_de_exemplo_e_recusada_em_producao(self):
+        resultado = _importar_settings(
+            DEBUG='False', DJANGO_SECRET_KEY='k' * 60, DATABASE_URL='postgresql://sgcas:change-me@db:5432/sgcas',
+            PII_ENCRYPTION_ENABLED='true', PII_ENCRYPTION_KEY=base64.b64encode(os.urandom(32)).decode(),
+            PII_HMAC_KEY=base64.b64encode(os.urandom(32)).decode(),
+        )
+        self.assertNotEqual(resultado.returncode, 0)
+        self.assertIn('senha do banco', resultado.stderr)
+
+    def test_senha_de_exemplo_vale_em_desenvolvimento(self):
+        resultado = _importar_settings(
+            DEBUG='True', DATABASE_URL='postgresql://sgcas:change-me@localhost:5434/sgcas', **self.CIFRA,
+        )
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+
+    def test_senha_propria_sobe_em_producao(self):
+        resultado = _importar_settings(
+            DEBUG='False', DJANGO_SECRET_KEY='k' * 60, DATABASE_URL='postgresql://sgcas:Zq8-r4Lm_92xT@db:5432/sgcas',
+            PII_ENCRYPTION_ENABLED='true', PII_ENCRYPTION_KEY=base64.b64encode(os.urandom(32)).decode(),
+            PII_HMAC_KEY=base64.b64encode(os.urandom(32)).decode(),
+        )
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+
+
 class CifraDosDadosPessoaisEmProducao(CenarioBase):
     """
     Sem cifragem, CPF, RG e e-mail ficam em texto puro no banco, e quem lê o banco (ou um

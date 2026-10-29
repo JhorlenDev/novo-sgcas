@@ -90,6 +90,7 @@ http://localhost:8000/api
 
 ```bash
 cp .env.example .env
+# edite o .env: POSTGRES_PASSWORD (sem valor padrão; o Compose recusa subir sem ela) e as chaves
 docker compose up -d --build
 ```
 
@@ -108,6 +109,30 @@ docker compose up -d
 
 Pular o `migrate` deixa a API no ar contra um esquema desatualizado, e os
 endpoints que usam as colunas novas falham em tempo de requisição.
+
+### O container é fechado de propósito
+
+A API roda **sem root** (uid `10001`), com o sistema de arquivos **somente leitura**, sem
+capacidades extras e sem poder ganhar privilégio (`read_only`, `cap_drop: ALL` e
+`no-new-privileges` no `docker-compose.yml`). Só dois lugares aceitam escrita: `/tmp` e o
+volume dos anexos. Quem conseguir executar algo dentro do container não consegue alterar o
+código. Os anexos (RG, comprovantes) ficam no volume do Docker `armazenamento`, que já nasce
+com o dono certo.
+
+Backup e restauração dos anexos (o volume se chama `api-sgcas_armazenamento` quando o
+Compose roda dentro da pasta `api-sgcas`):
+
+```bash
+# backup
+docker run --rm -v api-sgcas_armazenamento:/dados:ro -v "$PWD":/backup alpine \
+  tar czf /backup/anexos-$(date +%F).tar.gz -C /dados .
+# restauração (o chown devolve o dono ao usuário da API)
+docker run --rm -v api-sgcas_armazenamento:/dados -v "$PWD":/backup alpine \
+  sh -c "cd /dados && tar xzf /backup/anexos-AAAA-MM-DD.tar.gz && chown -R 10001:10001 /dados"
+```
+
+Quem usava a antiga pasta `./armazenamento` do servidor copia o conteúdo para o volume com o
+mesmo comando de restauração (empacotando a pasta com `tar czf`).
 
 ### Variáveis que precisam de valor real
 
