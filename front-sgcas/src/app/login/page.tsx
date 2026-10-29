@@ -34,6 +34,9 @@ const errors: Record<string, { title: string; text: string }> = {
   },
 };
 
+// Esmaece o brasão do canto de baixo à direita para o alto à esquerda, onde está o texto.
+const BRASAO_MASCARA = "linear-gradient(to top left, black 20%, transparent 90%)";
+
 export default function LoginPage() {
   return (
     <Suspense
@@ -74,7 +77,17 @@ function LoginContent() {
     <main className="min-h-screen bg-meta-warm-gray text-meta-charcoal">
       <div className="grid min-h-screen lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         {/* Apresentação: só no computador. No celular a página começa direto no acesso. */}
-        <section className="hidden flex-col justify-between bg-primary px-12 py-10 text-white lg:flex xl:px-16">
+        <section className="relative isolate hidden flex-col justify-between overflow-hidden bg-primary px-12 py-10 text-white lg:flex xl:px-16">
+          {/* Marca-d'água: o brasão de Tefé, esmaecido por uma máscara que o apaga em direção ao texto. */}
+          <Image
+            src="/brasao-tefe-fundo.png"
+            alt=""
+            width={550}
+            height={625}
+            aria-hidden="true"
+            className="pointer-events-none absolute -bottom-6 -right-8 -z-10 w-[28rem] max-w-none select-none opacity-40 xl:w-[32rem] 2xl:w-[40rem]"
+            style={{ maskImage: BRASAO_MASCARA, WebkitMaskImage: BRASAO_MASCARA }}
+          />
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/15">
               <Landmark className="h-5 w-5" aria-hidden="true" />
@@ -113,7 +126,7 @@ function LoginContent() {
             </ul>
           </div>
 
-          <p className="text-xs text-white/65">Acesso restrito a servidores autorizados.</p>
+          <p className="text-xs text-white/80">Acesso restrito a servidores autorizados.</p>
         </section>
 
         <section className="flex items-center justify-center px-4 py-8 sm:px-8">
