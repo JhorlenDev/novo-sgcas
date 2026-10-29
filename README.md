@@ -326,6 +326,8 @@ Variáveis da API para o login em produção (veja o modelo em [`api-sgcas/.env.
 | `FRONTEND_URL` | `https://sgcas.tefe.am.gov.br` (a origem pública, com `https`) |
 | `DEBUG` | `False` |
 
+**Confira antes de testar o login.** Com o `.env` preenchido, rode na API `python manage.py verificar_keycloak` (ou `docker compose run --rm api python manage.py verificar_keycloak`). Ele testa cada item acima contra o Tefé Cidadão real (emissor, chaves, client e endereço de retorno, segredo, funções da conta de serviço, os 7 papéis, se alguém já tem `ADMIN`, e opções inseguras do client) e diz em português o que falta. Só lê: não altera nada e não imprime o segredo.
+
 Como saber se funcionou: abra `https://sgcas.tefe.am.gov.br/login`, clique em **Entrar com Tefé Cidadão**, entre com a conta que recebeu `ADMIN` e confira que cai no Painel. Se voltar para `/login?erro=…`: `estado-invalido` (sessão expirada ou cookies bloqueados), `sem-codigo` (o SSO não devolveu o código), `conta-em-conflito` (o e-mail já pertence a outra conta do SGCAS), `email-nao-confirmado` (item 5) e `sem-acesso` (token recusado: itens 1, 2 e 4). Os detalhes ficam no log da API.
 
 ## Variáveis de ambiente
