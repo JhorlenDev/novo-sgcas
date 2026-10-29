@@ -74,8 +74,8 @@ function LoginContent() {
     <main className="min-h-screen bg-meta-warm-gray text-meta-charcoal">
       <div className="grid min-h-screen lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         {/* Apresentação: só no computador. No celular a página começa direto no acesso. */}
-        <section className="hidden flex-col justify-between bg-primary px-12 py-10 text-white lg:flex xl:px-16">
-          <div className="flex items-center gap-3">
+        <section className="hidden grid-rows-[1fr_auto_1fr] gap-8 bg-primary px-12 py-10 text-white lg:grid xl:px-16 [@media(max-height:760px)]:gap-4 [@media(max-height:760px)]:py-6">
+          <div className="flex items-center gap-3 self-start">
             <span className="flex h-16 w-14 shrink-0 items-center justify-center rounded-lg bg-white p-1.5">
               <Image src="/brasao-tefe-logo.png" alt="Brasão de Tefé" width={146} height={192} className="h-full w-full object-contain" priority />
             </span>
@@ -85,15 +85,15 @@ function LoginContent() {
             </div>
           </div>
 
-          <div className="max-w-lg">
-            <h1 className="!text-white text-3xl leading-tight xl:text-4xl">
+          <div className="mx-auto w-full max-w-2xl text-center">
+            <h1 className="!text-white text-4xl leading-[1.1] xl:text-5xl 2xl:text-6xl">
               Sistema de Gestão de Casos da Assistência Social
             </h1>
-            <p className="mt-4 max-w-md text-[15px] leading-7 text-white/80">
+            <p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-white/85 xl:text-xl xl:leading-9">
               O atendimento da rede socioassistencial do município, da recepção ao encaminhamento, num só cadastro.
             </p>
 
-            <ul className="mt-8 space-y-4">
+            <ul className="mt-10 space-y-6">
               {[
                 [ConciergeBell, "Recepção e fila", "Registro da chegada, senha e chamada para o atendimento."],
                 [FolderOpen, "Prontuário e acompanhamento", "Histórico de cada pessoa e de cada caso, por unidade."],
@@ -101,19 +101,19 @@ function LoginContent() {
               ].map(([Icone, titulo, texto]) => {
                 const Icon = Icone as typeof ConciergeBell;
                 return (
-                  <li key={titulo as string} className="flex gap-3">
-                    <Icon className="mt-0.5 h-5 w-5 shrink-0 text-white/80" aria-hidden="true" />
-                    <div>
-                      <p className="text-sm font-semibold">{titulo as string}</p>
-                      <p className="text-sm leading-6 text-white/75">{texto as string}</p>
-                    </div>
+                  <li key={titulo as string} className="flex flex-col items-center gap-1">
+                    <p className="flex items-center gap-2.5 text-base font-semibold xl:text-lg">
+                      <Icon className="h-5 w-5 shrink-0 text-white/85 xl:h-6 xl:w-6" aria-hidden="true" />
+                      {titulo as string}
+                    </p>
+                    <p className="max-w-md text-[15px] leading-6 text-white/85 xl:text-base">{texto as string}</p>
                   </li>
                 );
               })}
             </ul>
           </div>
 
-          <p className="text-xs text-white/65">Acesso restrito a servidores autorizados.</p>
+          <p className="self-end text-center text-xs text-white/80">Acesso restrito a servidores autorizados.</p>
         </section>
 
         <section className="flex items-center justify-center px-4 py-8 sm:px-8">
