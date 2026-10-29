@@ -286,6 +286,39 @@ Para o **primeiro administrador**, atribua a role de cliente `ADMIN` do SGCAS à
 
 Quem entra sem uma role reconhecida gera um pedido de acesso e vai para `/waiting-approval`. Um administrador gerencia os pedidos, perfis e vínculos com unidades. Operadores com escopo por unidade precisam desse vínculo para consultar a operação da unidade.
 
+### Checklist do Keycloak para produção
+
+Tudo abaixo é o que o código do SGCAS exige do realm; nada é opcional, exceto o item 8. Os endereços usam o domínio público de exemplo `https://sgcas.tefe.am.gov.br`: troque pelo seu.
+
+1. **Client `sgcas-web`** no realm (`KEYCLOAK_REALM`, por exemplo `prefeitura`):
+   - *Client authentication*: **ligado** (client confidencial). *Standard flow*: **ligado**. *Direct access grants* e *Implicit flow*: desligados.
+   - *Service accounts roles*: **ligado**. A API usa o próprio client (`client_credentials`) para conceder e retirar papéis quando o administrador aprova um pedido ou desativa um operador.
+   - *Valid redirect URIs*: exatamente `https://sgcas.tefe.am.gov.br/api/auth/keycloak/callback`, o mesmo valor de `KEYCLOAK_REDIRECT_URI`.
+   - *Valid post logout redirect URIs*: `https://sgcas.tefe.am.gov.br/login`.
+   - *Web origins*: `https://sgcas.tefe.am.gov.br`.
+   - Na aba *Credentials*, copie o **Client secret** para `KEYCLOAK_CLIENT_SECRET` (só no `.env` da API).
+2. **Conta de serviço do client** (aba *Service account roles* → *Assign role* → filtrar por clients → `realm-management`): conceda `view-users`, `manage-users` e `view-clients`. Sem `view-clients` o Keycloak não nega: devolve lista vazia, e o client parece inexistente.
+3. **Papéis do client** (*Clients → sgcas-web → Roles*): crie **com estes nomes exatos** `ADMIN`, `COORDENADOR`, `ASSISTENTE_SOCIAL`, `TECNICO`, `RECEPCIONISTA`, `GESTOR_ACOES_ITINERANTES` e `VISUALIZADOR`. O papel de uma pessoa é o que ela tem **dentro desse client**; o SGCAS não decide papel, só lê.
+4. **Conteúdo do token.** O papel é lido do *access token*, em `resource_access.sgcas-web.roles`, então mantenha no client o escopo `roles` padrão (com o mapeador *client roles* adicionando ao access token). A audiência do token precisa conter `account`, o que ocorre quando a pessoa tem o papel padrão do realm (`default-roles-…`, com as funções de `account`): **não retire essas funções dos operadores**, ou o login falha com "token inválido".
+5. **Contas dos operadores.** Na primeira entrada o SGCAS cria o operador com o nome e o e-mail do token. O e-mail **verificado** só pesa quando já existe um cadastro local sem vínculo com o SSO (de antes do Keycloak): ele só é adotado se o e-mail estiver verificado; do contrário o login volta com `email-nao-confirmado`. Se o e-mail já estiver ligado a *outra* identidade do SSO, volta `conta-em-conflito`.
+6. **Primeiro administrador.** Em *Users → (a pessoa) → Role mapping → Assign role → filtrar por clients → `sgcas-web` → `ADMIN`*, e então entre pelo SGCAS. A partir daí as aprovações e os perfis são feitos na tela **Usuários** do próprio sistema. Quem entra sem papel cai em `/waiting-approval` e vira um pedido de acesso.
+7. **Rede.** A API precisa alcançar o SSO por HTTPS (troca do código, chaves públicas e API de administração). O navegador só fala com o domínio do SGCAS.
+8. **Pré-cadastro do cidadão no Tefé Cidadão** (opcional, desligado por padrão): peça à equipe do SSO um client de serviço com permissão de chamar `POST {KEYCLOAK_URL}/realms/{realm}/pre-cadastro` e preencha `PRECADASTRO_ENABLED=true`, `PRECADASTRO_CLIENT_ID` e `PRECADASTRO_CLIENT_SECRET`. Sem isso, o cadastro do cidadão segue funcionando; apenas não cria a conta dele no SSO.
+
+Variáveis da API para o login em produção (veja o modelo em [`api-sgcas/.env.example`](api-sgcas/.env.example)):
+
+| Variável | Valor em produção |
+| --- | --- |
+| `KEYCLOAK_URL` | `https://sso.tefe.am.gov.br` |
+| `KEYCLOAK_REALM` | o realm do Tefé Cidadão (`prefeitura`) |
+| `KEYCLOAK_CLIENT_ID` | `sgcas-web` |
+| `KEYCLOAK_CLIENT_SECRET` | o segredo da aba *Credentials* |
+| `KEYCLOAK_REDIRECT_URI` | `https://sgcas.tefe.am.gov.br/api/auth/keycloak/callback` |
+| `FRONTEND_URL` | `https://sgcas.tefe.am.gov.br` (a origem pública, com `https`) |
+| `DEBUG` | `False` |
+
+Como saber se funcionou: abra `https://sgcas.tefe.am.gov.br/login`, clique em **Entrar com Tefé Cidadão**, entre com a conta que recebeu `ADMIN` e confira que cai no Painel. Se voltar para `/login?erro=…`: `estado-invalido` (sessão expirada ou cookies bloqueados), `sem-codigo` (o SSO não devolveu o código), `conta-em-conflito` (o e-mail já pertence a outra conta do SGCAS), `email-nao-confirmado` (item 5) e `sem-acesso` (token recusado: itens 1, 2 e 4). Os detalhes ficam no log da API.
+
 ## Variáveis de ambiente
 
 O modelo completo está em [`api-sgcas/.env.example`](api-sgcas/.env.example).
