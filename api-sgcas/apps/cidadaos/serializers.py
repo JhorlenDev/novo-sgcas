@@ -33,6 +33,17 @@ class CidadaoSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'criado_em', 'atualizado_em']
 
+    def to_representation(self, instance):
+        # `anexos` é o JSON gravado no cadastro, com o nome do arquivo em disco e o da
+        # miniatura. Isso é detalhe interno (o download passa pela API, pelo id do
+        # anexo): não sai nem aqui, nem na lista de anexos do prontuário.
+        dados = super().to_representation(instance)
+        dados['anexos'] = [
+            {chave: valor for chave, valor in anexo.items() if chave not in ('arquivo', 'miniatura')}
+            for anexo in (dados.get('anexos') or []) if isinstance(anexo, dict)
+        ]
+        return dados
+
 
 class EntradaDoHistoricoSerializer(serializers.Serializer):
     quando = serializers.DateTimeField()

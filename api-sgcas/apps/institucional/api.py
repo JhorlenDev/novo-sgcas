@@ -117,6 +117,10 @@ def servicos(request):
         unidade_id = d.pop('unidade_id')
         demanda_id = (d.pop('demanda_id', None) or '').strip() or None
 
+        # O coordenador cuida dos serviços da própria unidade (como na classificação, abaixo).
+        if request.user.papel != Papel.ADMIN and unidade_id != request.user.unidade_id:
+            return Response({'detalhe': 'Sem permissão para cadastrar serviço de outra unidade'},
+                            status=status.HTTP_403_FORBIDDEN)
         if not Unidade.ativas.filter(id=unidade_id).exists():
             return Response({'unidade_id': 'Unidade não encontrada'}, status=status.HTTP_400_BAD_REQUEST)
         if demanda_id and not Demanda.objects.filter(id=demanda_id, ativa=True).exists():

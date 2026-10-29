@@ -81,6 +81,10 @@ def aprovar(request, pedido_id: str):
 
     if papel not in PRECEDENCIA:
         raise ValidationError({'papel': f'Papel desconhecido: {papel}'})
+    # Antes de tocar no realm: uma unidade que não existe estouraria só ao gravar o
+    # operador, com o papel já concedido no Tefé Cidadão e a aprovação desfeita aqui.
+    if unidade_id and not Unidade.ativas.filter(id=unidade_id).exists():
+        raise ValidationError({'unidade_id': 'Unidade não encontrada'})
 
     pedido = PedidoDeAcesso.objects.filter(id=pedido_id).first()
     if pedido is None:
@@ -169,7 +173,10 @@ def listar_operadores(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def detalhar_operador(request, operador_id: str):
-    """Supervisão vê qualquer um; os demais, apenas a própria conta."""
+    """
+    O ADMIN vê qualquer um; o coordenador, a equipe da própria unidade e quem ainda
+    não tem unidade (o mesmo recorte da lista); os demais, apenas a própria conta.
+    """
     if not (request.user.ve_quem_atendeu or request.user.id == operador_id):
         return Response({'detalhe': 'Acesso negado'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -178,6 +185,14 @@ def detalhar_operador(request, operador_id: str):
     ).first()
     if operador is None:
         return Response({'detalhe': 'Operador não encontrado'}, status=status.HTTP_404_NOT_FOUND)
+
+    # A lista já esconde a equipe de outras unidades; o detalhe não pode ser a porta dos fundos.
+    if (
+        operador.id != request.user.id
+        and not request.user.ve_todas_as_unidades
+        and operador.unidade_id not in (None, request.user.unidade_id)
+    ):
+        return Response({'detalhe': 'Acesso negado'}, status=status.HTTP_403_FORBIDDEN)
 
     return Response(OperadorNaListaSerializer(operador).data)
 
@@ -211,6 +226,10 @@ def atualizar_operador(request, operador_id: str):
         operador.unidade_id = unidade_id
 
     desativando = d.get('ativo') is False and operador.ativo
+    if desativando and operador.id == request.user.id:
+        # Retiraria o próprio papel no realm: o último administrador se trancaria para fora.
+        return Response({'detalhe': 'Você não pode desativar a própria conta.'},
+                        status=status.HTTP_400_BAD_REQUEST)
     if desativando and operador.keycloak_id:
         keycloak.remover_papeis(operador.keycloak_id)
 

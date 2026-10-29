@@ -1,8 +1,9 @@
 """Rotas de entrada e saida pelo Tefe Cidadao."""
 from __future__ import annotations
 
-import secrets
 import logging
+import secrets
+import time
 
 from django.conf import settings
 from django.http import HttpResponseRedirect, JsonResponse
@@ -10,7 +11,7 @@ from django.middleware.csrf import get_token
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.contas import keycloak
-from apps.contas.autenticacao import CHAVE_ID_TOKEN, CHAVE_OPERADOR
+from apps.contas.autenticacao import CHAVE_ID_TOKEN, CHAVE_LOGIN_EM, CHAVE_OPERADOR
 from apps.contas.servicos import AcessoPendente, ContaEmConflito, entrar, registrar_pedido
 
 CHAVE_STATE = 'kc_state'
@@ -89,6 +90,8 @@ def callback(request):
     request.session.cycle_key()
     request.session[CHAVE_OPERADOR] = operador.id
     request.session[CHAVE_ID_TOKEN] = tokens.get('id_token', '')
+    # A contagem da vida máxima da sessão começa aqui e não é renovada pelo uso.
+    request.session[CHAVE_LOGIN_EM] = time.time()
     logger.info('Login SGCAS concluido: operador=%s papel=%s email=%s', operador.id, operador.papel, operador.email)
 
     return HttpResponseRedirect(_frontend('/dashboard'))

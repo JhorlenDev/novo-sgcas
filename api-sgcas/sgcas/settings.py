@@ -26,14 +26,17 @@ ALLOWED_HOSTS = env('ALLOWED_HOSTS')
 
 SECRET_KEY = env('DJANGO_SECRET_KEY', default='inseguro-apenas-para-desenvolvimento')
 
-# Em producao a chave nao pode ser a de exemplo.
+# Em producao a chave nao pode ser a de exemplo, nem a do `.env.example`, nem curta.
 #
-# Falhar no boot e melhor do que subir: com a chave padrao, qualquer pessoa que
-# leia o repositorio consegue forjar uma sessao assinada. O sistema anterior
-# adotava a mesma postura, e por isso nunca subiu em producao mal configurado.
-if not DEBUG and SECRET_KEY == 'inseguro-apenas-para-desenvolvimento':
+# Falhar no boot e melhor do que subir: com uma chave conhecida, qualquer pessoa que
+# leia o repositorio consegue forjar uma sessao assinada. Um `.env` copiado do modelo
+# sem trocar a chave subiria sem aviso, entao os valores de exemplo tambem sao barrados.
+_CHAVES_DE_EXEMPLO = {'inseguro-apenas-para-desenvolvimento', 'CHAVE_SECRETA_AQUI'}
+_TAMANHO_MINIMO_DA_CHAVE = 32
+if not DEBUG and (SECRET_KEY in _CHAVES_DE_EXEMPLO or len(SECRET_KEY) < _TAMANHO_MINIMO_DA_CHAVE):
     raise RuntimeError(
-        'DJANGO_SECRET_KEY precisa ser definida em produção. '
+        'DJANGO_SECRET_KEY precisa ser definida em produção, com pelo menos '
+        f'{_TAMANHO_MINIMO_DA_CHAVE} caracteres e diferente da chave de exemplo. '
         'Gere uma com: python -c "import secrets; print(secrets.token_urlsafe(64))"'
     )
 
@@ -59,6 +62,8 @@ MIDDLEWARE = [
     # Antes de tudo, inclusive da validação de host e do redirecionamento HTTPS:
     # o healthcheck do container fala em HTTP puro com o Host do curl.
     'apps.comum.saude.Saude',
+    # Fora do cache do navegador tudo o que a API devolve (ver o proprio modulo).
+    'apps.comum.sem_cache.SemCacheNaApi',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -142,9 +147,12 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = 'no-referrer'
 X_FRAME_OPTIONS = 'DENY'
 
-SESSION_COOKIE_AGE = 28800  # 8 horas
+SESSION_COOKIE_AGE = 28800  # 8 horas sem uso
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_SAVE_EVERY_REQUEST = True
+# O limite acima renova a cada requisicao. Este e o teto: quem entrou ha mais que isso
+# entra de novo, usando o sistema o tempo todo ou nao (ver apps.contas.autenticacao).
+SESSION_MAX_LIFETIME = env.int('SESSION_MAX_LIFETIME', default=12 * 3600)
 
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -230,3 +238,7 @@ FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')
 # e reenviar solicitação.
 _front = urlparse(FRONTEND_URL)
 CSRF_TRUSTED_ORIGINS = [f'{_front.scheme}://{_front.netloc}']
+# Outros enderecos pelos quais o front e aberto (o IP da rede num teste, por exemplo).
+# Toda escrita autenticada confere o token CSRF e a origem, entao a origem do
+# navegador precisa estar aqui. Vazio por padrao.
+CSRF_TRUSTED_ORIGINS += env.list('CSRF_TRUSTED_ORIGINS_EXTRAS', default=[])

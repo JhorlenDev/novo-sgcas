@@ -41,6 +41,10 @@ from apps.contas.escopo import pode_acessar_unidade, resolver_filtro
 from apps.contas.permissoes import EquipeDeAtendimento, PodeConsultar, Recepcao
 
 
+# O que uma ação em campo pode declarar atender: bem acima do real, bem abaixo do que o banco aceita.
+LIMITE_DOS_NUMEROS_DA_ACAO = 1_000_000
+
+
 def _protocolo() -> str:
     agora = timezone.localtime(timezone.now())
     return f'{agora:%Y%m%d}-{uuid.uuid4().hex[:6].upper()}'
@@ -801,6 +805,10 @@ def concluir_acao_itinerante(request, acao_id):
         casos = int(casos)
     except (TypeError, ValueError):
         return Response({'detalhe': 'Valores inválidos.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    # Negativo não existe, e um número enorme estouraria a coluna (erro 500 no banco).
+    if not all(0 <= valor <= LIMITE_DOS_NUMEROS_DA_ACAO for valor in (cidadaos, participantes, beneficios, casos)):
+        return Response({'detalhe': f'Informe números de 0 a {LIMITE_DOS_NUMEROS_DA_ACAO}.'},
                         status=status.HTTP_400_BAD_REQUEST)
 
     acao.cidadaos_atendidos = cidadaos
