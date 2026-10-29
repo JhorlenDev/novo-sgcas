@@ -151,6 +151,10 @@ def criar(*, caso: Caso, operador, destino, destino_externo: str, dados: dict, a
         raise EncaminhamentoInvalido(
             {'unidade_destino_id': 'A unidade de destino é a própria unidade do caso.'}, 400,
         )
+    if destino is not None and not destino.recebe_encaminhamentos:
+        raise EncaminhamentoInvalido(
+            {'unidade_destino_id': 'Esta unidade não recebe encaminhamentos de casos.'}, 400,
+        )
     ja_enviado = Encaminhamento.objects.filter(
         caso=caso, unidade_origem_id=caso.unidade_id,
         situacao__in=[Encaminhamento.Situacao.PENDENTE, Encaminhamento.Situacao.ACEITO],

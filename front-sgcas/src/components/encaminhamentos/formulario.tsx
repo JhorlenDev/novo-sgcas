@@ -86,8 +86,9 @@ export function CamposDeEncaminhamento({
   erros?: ErrosDoEncaminhamento;
 }) {
   const { user } = useAuth();
-  // Encaminhar para a própria unidade a API recusa: não oferece a opção.
-  const destinos = unidades.filter((unidade) => unidade.id !== user?.unidade?.id);
+  // A API recusa encaminhar para a própria unidade e para a de manutenção do sistema (SEDECTI),
+  // que não atende ninguém: não oferece essas opções.
+  const destinos = unidades.filter((unidade) => unidade.id !== user?.unidade?.id && unidade.tipo !== "MANUTENCAO");
 
   function mudar<K extends keyof FormularioDeEncaminhamento>(campo: K, novo: FormularioDeEncaminhamento[K]) {
     onChange({ ...valor, [campo]: novo });

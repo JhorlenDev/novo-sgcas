@@ -92,6 +92,15 @@ A regra vale na API (os campos nem são enviados à recepção) e na tela. O tex
 
 > **Limite conhecido.** A recepção continua lendo o relato dos casos (as observações que os técnicos escrevem) pelo histórico municipal e por `/api/cases/`. Isso já era assim antes dos encaminhamentos e é uma decisão de privacidade que cabe à direção: se o relato puder conter violência ou saúde, vale restringi-lo também.
 
+### SEDECTI: a unidade da manutenção do sistema
+
+A unidade **SEDECTI — Manutenção do SGCAS** é criada pelo `cadastrar_servicos` (a cada implantação, sem duplicar) e existe para **lotar os devs** que mantêm o sistema: na tela **Usuários**, o administrador escolhe essa unidade para cada um deles.
+
+- **Estar nela não dá poder nenhum.** O papel continua vindo do Tefé Cidadão: quem precisa administrar o sistema recebe `ADMIN` no client `sgcas-web`, como qualquer administrador. A lotação só organiza quem é quem.
+- **Não atende a população:** não tem serviços, não é subordinada à secretaria de assistência social (não leva o prefixo `SEMAS/`) e tem o tipo próprio `MANUTENCAO` ("Manutenção do sistema").
+- **Não recebe encaminhamento de caso.** A API recusa (400) e a tela não a oferece como destino: um caso encaminhado a ela ficaria parado, sem técnico.
+- Se a administração renomear, desativar ou remover a unidade na tela Institucional, o `cadastrar_servicos` não desfaz nem recria.
+
 ### Mesmo auxílio em várias unidades
 
 Ao registrar um benefício, ou ao encaminhar à fila um pedido de serviço da demanda **Benefício Eventual**, o sistema confere o **mês corrente** (no fuso do município), em todas as unidades. A exceção é o **auxílio de nascimento** (o auxílio maternidade, tipo "Situação de nascimento"), que vale **uma vez a cada 12 meses**: o benefício concedido em 27/10 deixa de contar em 27/10 do ano seguinte. O que é conferido:

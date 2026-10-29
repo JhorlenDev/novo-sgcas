@@ -79,6 +79,9 @@ class Unidade(models.Model):
         CENTRO_POP = 'CENTRO_POP', 'Centro POP'
         ABRIGO = 'ABRIGO', 'Acolhimento institucional'
         SEDE = 'SEDE', 'Sede'
+        # Não atende a população: é onde ficam lotados os devs que cuidam do sistema.
+        # Não recebe encaminhamento de caso (ver `recebe_encaminhamentos`).
+        MANUTENCAO = 'MANUTENCAO', 'Manutenção do sistema'
         OUTRO = 'OUTRO', 'Outro'
 
     id = models.TextField(primary_key=True)
@@ -112,6 +115,16 @@ class Unidade(models.Model):
 
     def __str__(self) -> str:
         return self.nome
+
+    @property
+    def recebe_encaminhamentos(self) -> bool:
+        """
+        Se a unidade pode ser destino de um caso.
+
+        A de manutenção do sistema (SEDECTI) não atende ninguém: um caso encaminhado a ela
+        ficaria parado, sem técnico, e a pessoa sem atendimento.
+        """
+        return self.tipo != self.Tipo.MANUTENCAO
 
     def nome_qualificado(self) -> str:
         """

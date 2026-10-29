@@ -26,7 +26,11 @@ const tiposDeUnidade = [
   ["OUTRO", "Outro"],
 ] as const;
 
+// Existe para lotar os devs (SEDECTI), criada pelo catálogo: não é opção ao cadastrar unidade nova.
+const TIPO_MANUTENCAO = "MANUTENCAO";
+
 function rotuloDoTipoDeUnidade(tipo?: string | null) {
+  if (tipo === TIPO_MANUTENCAO) return "Manutenção do sistema";
   return tiposDeUnidade.find(([valor]) => valor === tipo)?.[1] ?? tipo ?? "—";
 }
 

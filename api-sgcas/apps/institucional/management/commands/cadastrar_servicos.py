@@ -174,6 +174,14 @@ CATALOGO = [
 ]
 
 
+# Unidades que não atendem a população: ficam fora do CATALOGO, que é de unidades com serviços
+# e subordinadas à secretaria de assistência social. Aqui ficam lotados os devs que mantêm o
+# sistema (a SEDECTI não é subordinada à SEMAS, então não leva coordenação nem o prefixo
+# `SEMAS/`). (sigla, nome)
+UNIDADES_DE_MANUTENCAO = [
+    ('SEDECTI', 'SEDECTI — Manutenção do SGCAS'),
+]
+
 # A secretaria no topo da hierarquia. A sigla é a que o Tefé Cidadão recebe na
 # auditoria do pré-cadastro (`SEMAS/CRAS Centro`); o nome por extenso é o padrão
 # da sigla e pode ser ajustado depois na tela Institucional.
@@ -286,6 +294,19 @@ class Command(BaseCommand):
                     servico.tipo_de_beneficio = tipo_de_auxilio
                 servico.save()
 
+        manutencao_criadas = 0
+        for sigla, nome in UNIDADES_DE_MANUTENCAO:
+            # `objects`, e não `ativas`: a sigla é única, e uma unidade removida ou desativada
+            # na tela Institucional é decisão da administração — não se recria nem se reativa.
+            if Unidade.objects.filter(sigla=sigla).exists():
+                continue
+            Unidade.objects.create(
+                id=str(uuid.uuid4()), nome=nome, sigla=sigla, tipo=Unidade.Tipo.MANUTENCAO,
+                coordenacao=None, criada_em=agora, atualizada_em=agora,
+            )
+            manutencao_criadas += 1
+            self.stdout.write(self.style.SUCCESS(f'  unidade criada: {nome}'))
+
         self.stdout.write('')
         if raiz_criada:
             self.stdout.write(self.style.SUCCESS(
@@ -294,6 +315,7 @@ class Command(BaseCommand):
         self.stdout.write(f'demandas criadas    : {demandas_criadas}')
         self.stdout.write(f'unidades criadas    : {criadas}')
         self.stdout.write(f'unidades existentes : {atualizadas}')
+        self.stdout.write(f'de manutenção criadas: {manutencao_criadas}')
         self.stdout.write(f'serviços novos      : {servicos_novos}')
         self.stdout.write(f'total de serviços   : {Servico.objects.count()}')
         if sem_categoria:
