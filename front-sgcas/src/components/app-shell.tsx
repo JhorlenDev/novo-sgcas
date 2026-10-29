@@ -6,7 +6,6 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   ArrowLeftRight,
   Building2,
-  ChevronRight,
   ConciergeBell,
   FolderOpen,
   HeartHandshake,
@@ -15,7 +14,6 @@ import {
   LogOut,
   MapPinned,
   Menu,
-  PanelLeftClose,
   TriangleAlert,
   UserCog,
   Users,
@@ -165,14 +163,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className={cn("transition-[padding] duration-200", recolhido ? "lg:pl-[4.5rem]" : "lg:pl-64")}>
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-meta-divider bg-white px-3 sm:gap-3 sm:px-4 lg:px-8">
-          <button
-            type="button"
-            onClick={() => setGavetaAberta(true)}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-meta-charcoal transition-colors hover:bg-meta-soft-gray lg:hidden"
-            aria-label="Abrir menu"
-          >
-            <Menu className="h-5 w-5" aria-hidden="true" />
-          </button>
+          <BotaoDoMenu rotulo="Abrir menu" onClick={() => setGavetaAberta(true)} className="lg:hidden" />
 
           {/* Celular e tablet: o título da tela, com a unidade logo abaixo. */}
           <div className="min-w-0 flex-1 lg:hidden">
@@ -247,30 +238,13 @@ function MenuFixo({
         recolhido ? "lg:w-[4.5rem]" : "lg:w-64",
       )}
     >
-      <div className={cn("relative flex h-14 shrink-0 items-center border-b border-meta-divider", recolhido ? "justify-center" : "justify-between pl-5 pr-2")}>
-        <Marca href={homeHref} compacta={recolhido} />
-        {recolhido ? (
-          // Com o menu recolhido o botão fica na borda, à vista no mesmo ponto onde o menu abre.
-          <button
-            type="button"
-            onClick={onAlternar}
-            className="absolute -right-3 top-4 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-meta-divider bg-white text-meta-slate shadow-lift transition-colors hover:bg-meta-soft-gray hover:text-meta-charcoal"
-            aria-label="Expandir menu lateral"
-            title="Expandir menu"
-          >
-            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onAlternar}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-meta-slate transition-colors hover:bg-meta-soft-gray hover:text-meta-charcoal"
-            aria-label="Recolher menu lateral"
-            title="Recolher menu"
-          >
-            <PanelLeftClose className="h-[18px] w-[18px]" aria-hidden="true" />
-          </button>
-        )}
+      <div className={cn("flex h-14 shrink-0 items-center gap-2 border-b border-meta-divider", recolhido ? "justify-center" : "px-3")}>
+        {/* O mesmo botão do menu do celular: aqui ele recolhe e expande o menu lateral. */}
+        <BotaoDoMenu
+          rotulo={recolhido ? "Expandir menu lateral" : "Recolher menu lateral"}
+          onClick={onAlternar}
+        />
+        {!recolhido && <Marca href={homeHref} />}
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-4">
@@ -329,6 +303,23 @@ function Gaveta({
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
+  );
+}
+
+function BotaoDoMenu({ rotulo, onClick, className }: { rotulo: string; onClick: () => void; className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={rotulo}
+      title={rotulo}
+      className={cn(
+        "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-meta-charcoal transition-colors hover:bg-meta-soft-gray",
+        className,
+      )}
+    >
+      <Menu className="h-5 w-5" aria-hidden="true" />
+    </button>
   );
 }
 
