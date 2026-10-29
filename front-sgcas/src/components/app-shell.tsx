@@ -6,6 +6,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   ArrowLeftRight,
   Building2,
+  ChevronRight,
   ConciergeBell,
   FolderOpen,
   HeartHandshake,
@@ -15,7 +16,6 @@ import {
   MapPinned,
   Menu,
   PanelLeftClose,
-  PanelLeftOpen,
   TriangleAlert,
   UserCog,
   Users,
@@ -247,30 +247,41 @@ function MenuFixo({
         recolhido ? "lg:w-[4.5rem]" : "lg:w-64",
       )}
     >
-      <div className={cn("flex h-14 shrink-0 items-center border-b border-meta-divider", recolhido ? "justify-center" : "px-5")}>
+      <div className={cn("relative flex h-14 shrink-0 items-center border-b border-meta-divider", recolhido ? "justify-center" : "justify-between pl-5 pr-2")}>
         <Marca href={homeHref} compacta={recolhido} />
+        {recolhido ? (
+          // Com o menu recolhido o botão fica na borda, à vista no mesmo ponto onde o menu abre.
+          <button
+            type="button"
+            onClick={onAlternar}
+            className="absolute -right-3 top-4 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-meta-divider bg-white text-meta-slate shadow-lift transition-colors hover:bg-meta-soft-gray hover:text-meta-charcoal"
+            aria-label="Expandir menu lateral"
+            title="Expandir menu"
+          >
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onAlternar}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-meta-slate transition-colors hover:bg-meta-soft-gray hover:text-meta-charcoal"
+            aria-label="Recolher menu lateral"
+            title="Recolher menu"
+          >
+            <PanelLeftClose className="h-[18px] w-[18px]" aria-hidden="true" />
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-4">
         <Navegacao pathname={pathname} papel={papel} compacta={recolhido} pendencias={pendencias} />
       </div>
 
-      <div className="shrink-0 border-t border-meta-divider p-3">
-        <button
-          type="button"
-          onClick={onAlternar}
-          className={cn(
-            "flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-meta-slate transition-colors hover:bg-meta-soft-gray hover:text-meta-charcoal",
-            recolhido && "justify-center px-0",
-          )}
-          aria-label={recolhido ? "Expandir menu lateral" : "Recolher menu lateral"}
-          title={recolhido ? "Expandir menu" : "Recolher menu"}
-        >
-          {recolhido ? <PanelLeftOpen className="h-[18px] w-[18px]" aria-hidden="true" /> : <PanelLeftClose className="h-[18px] w-[18px]" aria-hidden="true" />}
-          {!recolhido && <span>Recolher menu</span>}
-        </button>
-        {!recolhido && <Rodape />}
-      </div>
+      {!recolhido && (
+        <div className="shrink-0 border-t border-meta-divider p-4">
+          <Rodape />
+        </div>
+      )}
     </aside>
   );
 }
