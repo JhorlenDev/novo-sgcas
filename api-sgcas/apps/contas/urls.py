@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.contas import api, dev_login, views  # DEV-LOGIN: `dev_login`
+from apps.contas import api, views
 
 urlpatterns = [
     path('keycloak/login', views.login, name='login'),
@@ -8,8 +8,6 @@ urlpatterns = [
     path('access-request/resend', views.reenviar_solicitacao, name='reenviar-solicitacao'),
     path('logout', views.logout, name='logout'),
     path('me', api.eu, name='eu'),
-    path('dev', dev_login.indice, name='dev-login-indice'),  # DEV-LOGIN
-    path('dev/login', dev_login.entrar_como, name='dev-login'),  # DEV-LOGIN
 ]
 
 pedidos_urlpatterns = [
