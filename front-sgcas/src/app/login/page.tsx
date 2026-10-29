@@ -28,6 +28,10 @@ const errors: Record<string, { title: string; text: string }> = {
     title: "E-mail ainda não confirmado",
     text: "Confirme o e-mail da sua conta no Tefé Cidadão e tente entrar outra vez. Se continuar, procure o administrador.",
   },
+  "muitas-tentativas": {
+    title: "Muitas tentativas seguidas",
+    text: "Aguarde cerca de um minuto e tente entrar outra vez.",
+  },
 };
 
 export default function LoginPage() {

@@ -5,6 +5,11 @@ O limite vale por IP, e o IP vem de `X-Forwarded-For`, que o cliente escreve. O
 Next (o proxy que está na frente da API) acrescenta o endereço que viu ao fim do
 cabeçalho; o que vem antes é do cliente. Por isso o endereço confiável é o que
 fica na posição do último proxy, não o primeiro.
+
+Atrás da prefeitura, porém, dezenas de operadores saem pelo MESMO endereço
+público (NAT). Por isso o limite de volume é só um teto contra inundação, folgado
+para um escritório inteiro; o que freia quem tenta forçar a entrada é o limite de
+ERROS no retorno do Tefé Cidadão, que quem entra do jeito certo nunca consome.
 """
 import threading
 from unittest import mock
@@ -14,13 +19,17 @@ from django.db import DatabaseError, connection, connections
 from django.test import Client, RequestFactory, SimpleTestCase, TransactionTestCase, override_settings
 
 from apps.comum.rede import ip_do_cliente
-from apps.contas import throttle
+from apps.contas import throttle, views
+from apps.contas.servicos import MOTIVO_OUTRA_IDENTIDADE, ContaEmConflito
 from testes.base import CenarioBase
 
 LOGIN = '/api/auth/keycloak/login'
 CALLBACK = '/api/auth/keycloak/callback?state=x'
-LIMITE_DO_LOGIN = throttle.LIMITES[LOGIN]
+REENVIO = '/api/auth/access-request/resend'
+# Para os testes de mecânica: o teto de verdade é folgado demais para esgotar a cada teste.
+LIMITE_DO_LOGIN = 5
 INICIO_DE_JANELA = 6000  # múltiplo de 60: começo exato de uma janela
+BARRADO = '/login?erro=muitas-tentativas'
 
 
 def _requisicao(remoto='127.0.0.1', encaminhado=None):
@@ -73,6 +82,20 @@ def _cliente(real, falso=None):
     return Client(headers={'host': 'localhost', 'X-Forwarded-For': cadeia})
 
 
+def _barrado(resposta):
+    """A API recusou por excesso: manda a pessoa de volta à tela de login com o aviso."""
+    return resposta.status_code == 302 and resposta['Location'].endswith(BARRADO)
+
+
+def _teto_pequeno(teste, **limites):
+    """Troca os tetos de volume por valores que o teste consegue esgotar."""
+    padrao = {LOGIN.split('?')[0]: LIMITE_DO_LOGIN, '/api/auth/keycloak/callback': LIMITE_DO_LOGIN}
+    padrao.update(limites)
+    troca = mock.patch.dict(throttle.LIMITES, padrao)
+    troca.start()
+    teste.addCleanup(troca.stop)
+
+
 def _fixar_o_relogio(teste, instante=INICIO_DE_JANELA + 10):
     """
     Sem isto o teste depende da hora em que roda: se o minuto virar entre duas
@@ -87,6 +110,7 @@ def _fixar_o_relogio(teste, instante=INICIO_DE_JANELA + 10):
 class LimiteDasRotasDeEntrada(CenarioBase):
     def setUp(self):
         _fixar_o_relogio(self)
+        _teto_pequeno(self)
 
     def esgotar(self, real):
         cliente = _cliente(real)
@@ -97,7 +121,7 @@ class LimiteDasRotasDeEntrada(CenarioBase):
         self.esgotar('198.51.100.1')
         resposta = _cliente('198.51.100.1').get(LOGIN)
 
-        self.assertEqual(resposta.status_code, 429)
+        self.assertTrue(_barrado(resposta), resposta['Location'])
         espera = int(resposta['Retry-After'])
         self.assertTrue(1 <= espera <= throttle.JANELA, espera)
 
@@ -105,7 +129,7 @@ class LimiteDasRotasDeEntrada(CenarioBase):
         self.esgotar('198.51.100.2')
         for i in range(5):
             resposta = _cliente('198.51.100.2', falso=f'203.0.113.{i}').get(LOGIN)
-            self.assertEqual(resposta.status_code, 429, i)
+            self.assertTrue(_barrado(resposta), i)
 
     def test_clientes_diferentes_nao_se_afetam(self):
         self.esgotar('198.51.100.3')
@@ -118,13 +142,13 @@ class LimiteDasRotasDeEntrada(CenarioBase):
     def test_rotas_fora_da_lista_nao_sao_limitadas(self):
         cliente = _cliente('198.51.100.6')
         for _ in range(LIMITE_DO_LOGIN + 5):
-            self.assertEqual(cliente.get('/api/auth/me').status_code, 401)  # sem sessão, mas não 429
+            self.assertEqual(cliente.get('/api/auth/me').status_code, 401)  # sem sessão, mas não barrado
 
     def test_libera_na_janela_seguinte(self):
         cliente = _cliente('198.51.100.7')
         with mock.patch.object(throttle, '_agora', return_value=INICIO_DE_JANELA + 10):
             self.esgotar('198.51.100.7')
-            self.assertEqual(cliente.get(LOGIN).status_code, 429)
+            self.assertTrue(_barrado(cliente.get(LOGIN)))
         with mock.patch.object(throttle, '_agora', return_value=INICIO_DE_JANELA + 61):
             self.assertEqual(cliente.get(LOGIN).status_code, 302)
 
@@ -162,6 +186,7 @@ class LimiteDasRotasDeEntrada(CenarioBase):
 class ContagemExataSobConcorrencia(TransactionTestCase):
     def setUp(self):
         _fixar_o_relogio(self)
+        _teto_pequeno(self)
 
     def test_requisicoes_simultaneas_respeitam_o_limite_exato(self):
         resultados = []
@@ -169,9 +194,9 @@ class ContagemExataSobConcorrencia(TransactionTestCase):
 
         def chamar():
             try:
-                codigo = _cliente('198.51.100.200').get(LOGIN).status_code
+                resposta = _cliente('198.51.100.200').get(LOGIN)
                 with trava:
-                    resultados.append(codigo)
+                    resultados.append('barrado' if _barrado(resposta) else resposta.status_code)
             finally:
                 connections.close_all()
 
@@ -182,5 +207,113 @@ class ContagemExataSobConcorrencia(TransactionTestCase):
             fio.join(timeout=60)
 
         self.assertEqual(len(resultados), LIMITE_DO_LOGIN * 2)
-        self.assertEqual(resultados.count(302), LIMITE_DO_LOGIN, sorted(resultados))
-        self.assertEqual(resultados.count(429), LIMITE_DO_LOGIN, sorted(resultados))
+        self.assertEqual(resultados.count(302), LIMITE_DO_LOGIN, sorted(map(str, resultados)))
+        self.assertEqual(resultados.count('barrado'), LIMITE_DO_LOGIN, sorted(map(str, resultados)))
+
+
+def _entrar_com_sucesso(teste, real):
+    """Uma pessoa que passa pelo Tefé Cidadão e volta com tudo certo."""
+    navegador = _cliente(real)
+    navegador.get(LOGIN)
+    state = navegador.session['kc_state']
+    with mock.patch.object(views.keycloak, 'trocar_codigo_por_token', return_value={'access_token': 'a.b.c', 'id_token': ''}), \
+            mock.patch.object(views.keycloak, 'validar_token', return_value={'sub': 's1'}), \
+            mock.patch.object(views, 'entrar', return_value=teste.tecnico):
+        return navegador.get(f'/api/auth/keycloak/callback?state={state}&code=c')
+
+
+@override_settings(TRUSTED_PROXIES=1)
+class UmEscritorioInteiroAtrasDoMesmoIp(CenarioBase):
+    """
+    Na prefeitura, secretaria, CRAS e CREAS saem pelo mesmo endereço público. Se
+    cada entrada gastasse o limite do IP, a décima primeira pessoa do minuto
+    ficaria do lado de fora.
+    """
+
+    def setUp(self):
+        _fixar_o_relogio(self)
+
+    def test_dezenas_de_pessoas_entram_no_mesmo_minuto(self):
+        for i in range(40):
+            resposta = _entrar_com_sucesso(self, '198.51.100.50')
+            self.assertTrue(resposta['Location'].endswith('/dashboard'), (i, resposta['Location']))
+
+    def test_o_limite_de_erros_nao_e_consumido_por_quem_entra_certo(self):
+        for _ in range(throttle.FALHAS_NO_CALLBACK + 5):
+            _entrar_com_sucesso(self, '198.51.100.51')
+        resposta = _cliente('198.51.100.51').get(CALLBACK)
+        self.assertTrue(resposta['Location'].endswith('/login?erro=estado-invalido'), resposta['Location'])
+
+
+@override_settings(TRUSTED_PROXIES=1)
+class ErrosNoRetornoDoTefeCidadao(CenarioBase):
+    """Quem forja ou repete retornos paga por cada erro, e só por erro."""
+
+    def setUp(self):
+        _fixar_o_relogio(self)
+
+    def errar(self, real, vezes):
+        cliente = _cliente(real)
+        for _ in range(vezes):
+            resposta = cliente.get(CALLBACK)
+            self.assertTrue(resposta['Location'].endswith('/login?erro=estado-invalido'), resposta['Location'])
+
+    def test_erros_demais_barram_o_ip_e_dizem_quando_voltar(self):
+        self.errar('198.51.100.60', throttle.FALHAS_NO_CALLBACK)
+        resposta = _cliente('198.51.100.60').get(CALLBACK)
+        self.assertTrue(_barrado(resposta), resposta['Location'])
+        self.assertTrue(1 <= int(resposta['Retry-After']) <= throttle.JANELA)
+
+    def test_barrado_por_erros_nem_entrando_certo_passa_ate_a_janela_virar(self):
+        self.errar('198.51.100.61', throttle.FALHAS_NO_CALLBACK)
+        navegador = _cliente('198.51.100.61')
+        navegador.get(LOGIN)
+        state = navegador.session['kc_state']
+        resposta = navegador.get(f'/api/auth/keycloak/callback?state={state}&code=c')
+        self.assertTrue(_barrado(resposta), resposta['Location'])
+
+    def test_os_erros_de_um_ip_nao_barram_outro(self):
+        self.errar('198.51.100.62', throttle.FALHAS_NO_CALLBACK)
+        self.assertTrue(_cliente('198.51.100.62').get(CALLBACK)['Location'].endswith(BARRADO))
+        self.assertTrue(_cliente('198.51.100.63').get(CALLBACK)['Location'].endswith('estado-invalido'))
+
+    def test_a_janela_seguinte_comeca_do_zero(self):
+        self.errar('198.51.100.64', throttle.FALHAS_NO_CALLBACK)
+        with mock.patch.object(throttle, '_agora', return_value=INICIO_DE_JANELA + 70):
+            self.errar('198.51.100.64', 1)
+
+    def test_conta_em_conflito_nao_conta_como_ataque(self):
+        # A pessoa é de verdade e o token é válido: o problema é da conta, e ela
+        # tentar de novo não pode esgotar o crédito de todo o escritório.
+        for _ in range(throttle.FALHAS_NO_CALLBACK + 3):
+            navegador = _cliente('198.51.100.65')
+            navegador.get(LOGIN)
+            state = navegador.session['kc_state']
+            with mock.patch.object(views.keycloak, 'trocar_codigo_por_token', return_value={'access_token': 'a.b.c'}), \
+                    mock.patch.object(views.keycloak, 'validar_token', return_value={'sub': 's1'}), \
+                    mock.patch.object(views, 'entrar', side_effect=ContaEmConflito(MOTIVO_OUTRA_IDENTIDADE)):
+                resposta = navegador.get(f'/api/auth/keycloak/callback?state={state}&code=c')
+            self.assertTrue(resposta['Location'].endswith('/login?erro=conta-em-conflito'), resposta['Location'])
+        self.errar('198.51.100.65', 1)
+
+    def test_falha_do_contador_de_erros_nao_derruba_a_entrada(self):
+        with mock.patch.object(throttle, '_anotar_falha', side_effect=DatabaseError('indisponível')):
+            with self.assertLogs('apps.contas.throttle', level='ERROR'):
+                resposta = _cliente('198.51.100.66').get(CALLBACK)
+        self.assertTrue(resposta['Location'].endswith('estado-invalido'), resposta['Location'])
+
+
+@override_settings(TRUSTED_PROXIES=1)
+class ReenvioDoPedidoDeAcesso(CenarioBase):
+    def setUp(self):
+        _fixar_o_relogio(self)
+
+    def test_excesso_volta_429_em_portugues_com_acento_e_com_espera(self):
+        with mock.patch.dict(throttle.LIMITES, {REENVIO: 3}):
+            cliente = _cliente('198.51.100.70')
+            for _ in range(3):
+                self.assertNotEqual(cliente.post(REENVIO).status_code, 429)
+            resposta = cliente.post(REENVIO)
+        self.assertEqual(resposta.status_code, 429)
+        self.assertIn('Muitas requisições', resposta.json()['detalhe'])
+        self.assertTrue(1 <= int(resposta['Retry-After']) <= throttle.JANELA)
