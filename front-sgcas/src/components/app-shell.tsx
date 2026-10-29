@@ -6,6 +6,8 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   ArrowLeftRight,
   Building2,
+  ChevronLeft,
+  ChevronRight,
   ConciergeBell,
   FolderOpen,
   HeartHandshake,
@@ -238,13 +240,21 @@ function MenuFixo({
         recolhido ? "lg:w-[4.5rem]" : "lg:w-64",
       )}
     >
-      <div className={cn("flex h-14 shrink-0 items-center gap-2 border-b border-meta-divider", recolhido ? "justify-center" : "px-3")}>
-        {/* O mesmo botão do menu do celular: aqui ele recolhe e expande o menu lateral. */}
-        <BotaoDoMenu
-          rotulo={recolhido ? "Expandir menu lateral" : "Recolher menu lateral"}
+      <div className={cn("relative flex h-14 shrink-0 items-center border-b border-meta-divider", recolhido ? "justify-center" : "justify-between pl-5 pr-3")}>
+        <Marca href={homeHref} compacta={recolhido} />
+        {/* O botão redondo de sempre: seta para a esquerda recolhe; recolhido, ele fica na borda, com seta para a direita. */}
+        <button
+          type="button"
           onClick={onAlternar}
-        />
-        {!recolhido && <Marca href={homeHref} />}
+          className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-meta-charcoal transition-colors hover:bg-meta-soft-gray",
+            recolhido && "absolute -right-5 top-[10px] z-10 border border-meta-divider bg-white shadow-lift",
+          )}
+          title={recolhido ? "Expandir menu" : "Minimizar menu"}
+          aria-label={recolhido ? "Expandir menu lateral" : "Minimizar menu lateral"}
+        >
+          {recolhido ? <ChevronRight className="h-4 w-4" aria-hidden="true" /> : <ChevronLeft className="h-4 w-4" aria-hidden="true" />}
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-4">
