@@ -17,7 +17,7 @@ from unittest import mock
 from urllib.parse import urlparse
 
 from django.conf import settings
-from django.test import Client
+from django.test import Client, SimpleTestCase
 from django.utils import timezone
 
 from apps.contas.autenticacao import CHAVE_OPERADOR
@@ -440,6 +440,44 @@ class SenhaDoBancoEmProducao(CenarioBase):
             PII_HMAC_KEY=base64.b64encode(os.urandom(32)).decode(),
         )
         self.assertEqual(resultado.returncode, 0, resultado.stderr)
+
+
+class SenhasDeMarcacaoDoExemploEmProducao(CenarioBase):
+    """
+    O `.env.example` usa textos de marcação onde vai a senha do banco. Copiado sem trocar, o
+    texto viraria a senha real de um banco em produção: tem de ser recusado como o `change-me`.
+    """
+
+    def test_marcacoes_do_exemplo_sao_recusadas_em_producao(self):
+        for marcacao in ('SENHA_FORTE_AQUI', 'COLE_A_SENHA_DO_BANCO'):
+            with self.subTest(marcacao=marcacao):
+                resultado = _importar_settings(
+                    DEBUG='False', DJANGO_SECRET_KEY='k' * 60,
+                    DATABASE_URL=f'postgresql://sgcas:{marcacao}@db:5432/sgcas',
+                    PII_ENCRYPTION_ENABLED='true', PII_ENCRYPTION_KEY=base64.b64encode(os.urandom(32)).decode(),
+                    PII_HMAC_KEY=base64.b64encode(os.urandom(32)).decode(),
+                )
+                self.assertNotEqual(resultado.returncode, 0)
+                self.assertIn('senha do banco', resultado.stderr)
+
+
+class ArquivoDeExemploDoAmbiente(SimpleTestCase):
+    """
+    Chave repetida no `.env.example` é armadilha: quem edita a primeira ocorrência, como o README
+    manda, tem o valor sobrescrito pela última (no Compose e no django-environ). O banco subia
+    com uma senha e a API tentava entrar com outra.
+    """
+
+    def test_nenhuma_variavel_aparece_duas_vezes(self):
+        arquivo = Path(settings.BASE_DIR) / '.env.example'
+        self.assertTrue(arquivo.exists(), arquivo)
+        nomes = [
+            linha.split('=', 1)[0].strip()
+            for linha in arquivo.read_text().splitlines()
+            if linha.strip() and not linha.lstrip().startswith('#') and '=' in linha
+        ]
+        repetidas = sorted({nome for nome in nomes if nomes.count(nome) > 1})
+        self.assertEqual(repetidas, [])
 
 
 class CifraDosDadosPessoaisEmProducao(CenarioBase):
