@@ -404,7 +404,7 @@ Há também scripts de navegador em `front-sgcas/scripts/`. Eles têm requisitos
 1. Configure domínios, HTTPS e proxy reverso. Use [`deploy/nginx/sgcas.conf`](deploy/nginx/sgcas.conf) como ponto de partida (testada no nginx 1.30): troque o domínio e os caminhos dos certificados, copie para `/etc/nginx/conf.d/`, rode `nginx -t` e recarregue. A configuração também limita requisições por IP (`limit_req`) com tetos **folgados de propósito**, porque a prefeitura inteira sai por um IP só; se alguém trabalhando normalmente receber `429`, aumente `rate`/`burst` no topo do arquivo, não remova os limites. Com `DEBUG=False`, a API exige HTTPS e usa cookies seguros; o proxy deve encaminhar `X-Forwarded-Proto` e `X-Forwarded-For`, como essa configuração faz.
 2. **Gere o `.env` de produção com o script**, em vez de montá-lo à mão: `deploy/gerar-env.sh sgcas.tefe.am.gov.br` (o domínio público, sem `https://`). Ele escreve `api-sgcas/.env` inteiro, com senha do banco, chave secreta e as duas chaves da cifragem aleatórias e coerentes entre si, o domínio nos lugares certos e permissão 600, **sem imprimir nenhum segredo**. Só o *Client secret* do Keycloak vem de você (variável `KEYCLOAK_CLIENT_SECRET` ou digitado quando ele pergunta). Se o arquivo já existe, o script recusa: trocar as chaves da cifragem de uma base com cadastros torna os dados ilegíveis (`--forcar` só para base nova; o arquivo antigo é guardado ao lado). **Copie as duas chaves `PII_*` para um cofre de senhas fora do servidor.** O que o script faz, para conferir ou ajustar à mão, está abaixo.
    Gere e preencha as **duas chaves da cifragem dos dados pessoais** (`PII_ENCRYPTION_KEY` e `PII_HMAC_KEY`, comando em [Cifragem de dados pessoais](#cifragem-de-dados-pessoais)): em produção a API não sobe sem elas. Preencha também segredos reais, `ALLOWED_HOSTS`, `FRONTEND_URL` e callback do Keycloak. Nunca publique `.env`. Atenção a dois valores: `ALLOWED_HOSTS` deve conter o host de `SGCAS_API_URL` (por exemplo `localhost`), **não** o domínio público, porque o Next troca o `Host` ao encaminhar para a API; e `FRONTEND_URL` deve ser a origem pública com `https` (por exemplo `https://sgcas.exemplo.gov.br`), pois também define a origem aceita pela proteção CSRF.
-3. Faça backup do PostgreSQL, dos anexos (volume `armazenamento`; comandos de backup e restauração em [`api-sgcas/README.md`](api-sgcas/README.md#o-container-é-fechado-de-propósito)) e **das chaves de cifragem, guardadas em lugar diferente do backup do banco**: sem elas os dados pessoais não podem ser recuperados.
+3. Agende o backup do PostgreSQL e dos anexos com `deploy/backup.sh` (veja [Backup e restauração](#backup-e-restauração)) e guarde **as chaves de cifragem em lugar diferente do backup do banco**: sem elas os dados pessoais não podem ser recuperados.
 4. Construa a API e execute as migrations **antes** de iniciar a nova versão:
 
    ```bash
@@ -425,7 +425,7 @@ Há também scripts de navegador em `front-sgcas/scripts/`. Eles têm requisitos
    npm run start -- -H 127.0.0.1
    ```
 
-O frontend deve ser mantido por um gerenciador de processos ou plataforma de hospedagem, escutando só no loopback (`-H 127.0.0.1`): o Next repassa o `X-Forwarded-For` que recebe, então quem o alcançasse direto escolheria o próprio IP. O Compose atual fornece a API e o banco; não inclui frontend, Keycloak nem terminação TLS (o nginx acima cuida do TLS).
+O frontend deve ser mantido por um gerenciador de processos ou plataforma de hospedagem, escutando só no loopback (`-H 127.0.0.1`). Em servidor Linux com systemd use [`deploy/sgcas-front.service`](deploy/sgcas-front.service) (as instruções de instalação estão no topo do arquivo): ele sobe com o servidor, reinicia se cair e roda sem privilégios. Por quê: o Next repassa o `X-Forwarded-For` que recebe, então quem o alcançasse direto escolheria o próprio IP. O Compose atual fornece a API e o banco; não inclui frontend, Keycloak nem terminação TLS (o nginx acima cuida do TLS).
 
 **O IP do cliente e a exposição da API.** O IP usado no limite de requisições e na auditoria vem do `X-Forwarded-For`. O proxy de rewrites do Next não o acrescenta, só o repassa; quem o define é o nginx, que na configuração do repositório **substitui** o cabeçalho pelo endereço que viu conectar (`proxy_set_header X-Forwarded-For $remote_addr;`), descartando o que o cliente enviou. Mantenha `TRUSTED_PROXIES` igual ao número de proxies reversos (1 com só o nginx; 2 com um balanceador antes dele, caso em que a configuração do nginx traz o ajuste necessário). Sem isso todos aparecem com o mesmo IP. O Next e a API também não devem ser alcançáveis sem passar pelo nginx: quem chega direto a eles escreve o cabeçalho inteiro e se passa por outro IP. Por isso o Compose publica a porta da API apenas em `127.0.0.1` (`API_BIND_ADDRESS`); se o Next ficar em outra máquina, informe o IP da interface privada dela, nunca `0.0.0.0`, e proteja a porta também com firewall. A tabela dos contadores do limite é criada pelo `migrate`.
 
@@ -434,6 +434,37 @@ O frontend deve ser mantido por um gerenciador de processos ou plataforma de hos
 **Tamanho dos anexos.** A API aceita anexos de até 25 MB, e três limites na cadeia precisam acompanhá-la: `client_max_body_size 26m` no nginx, `experimental.proxyClientMaxBodySize: "26mb"` em `front-sgcas/next.config.ts` (o padrão do Next, 10 MB, corta o corpo em silêncio e derruba a conexão com a API) e `TAMANHO_MAXIMO` em `api-sgcas/apps/cidadaos/anexos.py`. Se aumentar um, aumente os outros.
 
 **Healthcheck.** O Compose consulta `GET /api/health`, que confere o banco e responde `200` (`{"status":"ok"}`) ou `503`. Ele é tratado antes da validação de host e do redirecionamento HTTPS, então funciona de dentro do container em HTTP puro e só conta `200` como saudável. Serve também para monitoramento externo (passa pelo nginx e pelo Next como qualquer rota `/api`).
+
+### Backup e restauração
+
+`deploy/backup.sh [pasta]` copia o **banco** e os **anexos** (RG, comprovantes) para a pasta de destino (padrão `~/backups-sgcas`), confere que os arquivos ficaram íntegros (descarta o que saiu pela metade e sai com erro), cria-os com permissão 600 e apaga os de mais de 30 dias (`SGCAS_BACKUP_DIAS` muda isso). Para agendar todo dia às 2 h:
+
+```cron
+0 2 * * *  /caminho/do/projeto/deploy/backup.sh /caminho/dos/backups >> /var/log/sgcas-backup.log 2>&1
+```
+
+- **O que fica de fora, de propósito:** o `.env` e as chaves de cifragem. Os dados pessoais do banco são cifrados; guardar a chave junto do backup anularia a cifragem. Guarde as chaves em um cofre de senhas, **e sem elas o backup não devolve CPF, RG nem e-mail** (testado: com chave errada os dados recusam abrir).
+- **Copie os backups para fora do servidor** (outra máquina ou nuvem): backup no mesmo disco não protege de disco queimado nem de ransomware.
+- **Treine a restauração antes de precisar dela.** Recuperação do banco (para a API, apaga o banco e carrega o backup; vale também num servidor novo, depois de `docker compose up -d --wait postgres`):
+
+  ```bash
+  cd api-sgcas
+  docker compose stop api
+  docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d postgres -q -c "DROP DATABASE \"$POSTGRES_DB\"" -c "CREATE DATABASE \"$POSTGRES_DB\""'
+  gunzip -c /caminho/banco-AAAAMMDD-HHMMSS.sql.gz | docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -q -v ON_ERROR_STOP=1'
+  docker compose up -d api
+  ```
+
+  Os anexos voltam com o comando de restauração em [`api-sgcas/README.md`](api-sgcas/README.md#o-container-é-fechado-de-propósito). Restaurar um backup anterior a uma eliminação LGPD traz os dados de volta: reaplique as eliminações da trilha de auditoria.
+
+### Antes de abrir para os usuários
+
+1. **Gere um novo *Client secret*** do `sgcas-web` (console do Keycloak: *Clients → sgcas-web → Credentials → Regenerate*) e rode `deploy/gerar-env.sh` com ele. Um segredo que passou por chat, e-mail ou mensagem não deve ir para produção.
+2. No servidor, `docker compose run --rm api python manage.py verificar_keycloak` deve terminar em "Tudo certo" (confere o SSO, o segredo, o endereço de retorno do domínio real, as funções da conta de serviço e os 7 papéis).
+3. `curl -I https://SEU-DOMINIO/api/health` responde `200`; a tela de login abre; **entre com uma conta `ADMIN`** e confira que cai no Painel.
+4. Na tela **Usuários**, lote os devs na unidade **SEDECTI** e aprove os servidores com o perfil e a unidade certos.
+5. O backup agendado rodou pelo menos uma vez e **a restauração foi treinada**. As chaves `PII_*` estão num cofre, fora do servidor.
+6. `DEBUG=False`, a porta da API só no loopback e o nginx com o certificado válido (a API recusa subir em produção com configuração insegura, mas confira).
 
 ### Cifragem de dados pessoais
 

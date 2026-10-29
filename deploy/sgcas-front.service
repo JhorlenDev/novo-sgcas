@@ -1,0 +1,41 @@
+# SGCAS — o frontend (Next.js) como serviço do systemd: sobe com o servidor e reinicia sozinho se cair.
+#
+# Como usar (no servidor, como administrador):
+#   1. Ajuste User, Group e os dois caminhos abaixo (WorkingDirectory e, se o npm estiver em outro
+#      lugar, o ExecStart: `which npm`). O usuário NÃO precisa ser administrador: crie um sem
+#      privilégios (`sudo useradd --system --create-home sgcas-web`).
+#   2. Compile antes, como esse usuário, na pasta front-sgcas:
+#        npm ci && SGCAS_API_URL=http://localhost:8000 npm run build
+#   3. sudo cp deploy/sgcas-front.service /etc/systemd/system/
+#      sudo systemctl daemon-reload && sudo systemctl enable --now sgcas-front
+#   4. Conferir:  systemctl status sgcas-front   e   journalctl -u sgcas-front -f
+#
+# Escuta SÓ no 127.0.0.1 (o -H abaixo): quem o alcançasse direto escolheria o próprio IP. Quem fala
+# com o público é o nginx (deploy/nginx/sgcas.conf).
+
+[Unit]
+Description=SGCAS - frontend (Next.js)
+# A API roda em container: o front só precisa dela de pé quando atende, não para iniciar.
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=sgcas-web
+Group=sgcas-web
+WorkingDirectory=/opt/sgcas/front-sgcas
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=SGCAS_API_URL=http://localhost:8000
+ExecStart=/usr/bin/npm run start -- -H 127.0.0.1
+Restart=always
+RestartSec=5
+
+# Endurecimento: o processo não ganha privilégio, não enxerga /home nem escreve fora da pasta do projeto.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
