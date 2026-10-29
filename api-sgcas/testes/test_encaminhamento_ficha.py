@@ -383,7 +383,7 @@ class PrivacidadeDaFicha(_Ficha):
         self.encaminhar(caso_id)
         self.assertEqual(Encaminhamento.objects.get().contato_para_retorno, '(97) 99999-1234, falar com a irmã')
 
-        resposta = self.como(self.coordenador).delete(f'/api/citizens/{self.cidadao.id}/dados-pessoais')
+        resposta = self.como(self.admin).delete(f'/api/citizens/{self.cidadao.id}/dados-pessoais')
         self.assertEqual(resposta.status_code, 200, resposta.content)
 
         enc = Encaminhamento.objects.get()
@@ -396,7 +396,7 @@ class PrivacidadeDaFicha(_Ficha):
         # O aviso não guarda o nome: ele vem do cadastro, e o cadastro anonimizado
         # é o que passa a ser lido.
         self.encaminhar(self.abrir())
-        self.como(self.coordenador).delete(f'/api/citizens/{self.cidadao.id}/dados-pessoais')
+        self.como(self.admin).delete(f'/api/citizens/{self.cidadao.id}/dados-pessoais')
         aviso = Aviso.objects.get()
         self.assertTrue(aviso.cidadao.nome.startswith('Cidadão excluído'))
         self.assertNotIn(self.cidadao.nome, str(aviso.dados))

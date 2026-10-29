@@ -326,7 +326,7 @@ class Avisos(_Caixa):
 
     def test_apos_a_eliminacao_lgpd_o_aviso_diz_cidadao_excluido(self):
         self.enviar()
-        self.como(self.coordenador).delete(f'/api/citizens/{self.cidadao.id}/dados-pessoais')
+        self.como(self.admin).delete(f'/api/citizens/{self.cidadao.id}/dados-pessoais')
         mensagem = self.get('/api/notices/', self.tecnico).json()[0]['mensagem']
         self.assertIn('Cidadão excluído', mensagem)
         self.assertNotIn(self.cidadao.nome, mensagem)

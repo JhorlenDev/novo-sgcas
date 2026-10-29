@@ -433,7 +433,7 @@ Em uma base existente, essa atualização também prepara os índices de busca p
 
 ### Eliminação de dados pessoais (LGPD)
 
-`DELETE /api/citizens/:id/dados-pessoais` (ADMIN e COORDENADOR) elimina os dados pessoais do cidadão:
+`DELETE /api/citizens/:id/dados-pessoais` (**somente ADMIN**: não tem volta e vale para qualquer unidade) elimina os dados pessoais do cidadão:
 
 - **Apaga:** o cadastro inteiro (documentos, contatos, endereço, nascimento, raça, deficiência, composição da família, dados socioeconômicos, índices de busca), os documentos escaneados (no banco e a pasta inteira do disco) e o nome copiado nos benefícios. O registro permanece, anônimo (`Cidadão excluído xxxxxxxx`), e o mesmo CPF pode ser cadastrado de novo.
 - **Mantém:** os textos livres dos atendimentos (relato do caso, motivo da recepção, observações de encaminhamento, descrição do benefício), sem vínculo com a pessoa, por decisão da direção: o histórico é prestação de contas. Se o técnico escreveu o nome da pessoa dentro do texto, o nome continua no texto. Também ficam o histórico de consentimento e a trilha de auditoria (que registra a eliminação sem dado pessoal).

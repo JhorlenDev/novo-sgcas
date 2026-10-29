@@ -51,7 +51,7 @@ from apps.cidadaos import anexos as arquivos
 from apps.cidadaos import eliminacao
 from apps.cidadaos import pre_cadastro
 from apps.contas.permissoes import (
-    ComunicacaoEntreUnidades, EquipeDeAtendimento, PodeConsultar, Recepcao, Supervisao,
+    ComunicacaoEntreUnidades, EquipeDeAtendimento, PodeConsultar, Recepcao, SomenteAdmin, Supervisao,
 )
 from apps.contas.escopo import pode_acessar_unidade
 from apps.institucional.models import Servico, Unidade
@@ -764,7 +764,7 @@ def exportar_dados(request, cidadao_id: str):
 
 
 @api_view(['DELETE'])
-@permission_classes([Supervisao])
+@permission_classes([SomenteAdmin])
 @transaction.atomic
 def eliminar_dados_pessoais(request, cidadao_id: str):
     """
@@ -774,6 +774,9 @@ def eliminar_dados_pessoais(request, cidadao_id: str):
     copiado nos benefícios. O registro fica, anônimo, para a integridade das
     referências; os textos livres dos atendimentos ficam sem vínculo com a
     pessoa. Detalhes e a decisão por trás em `apps.cidadaos.eliminacao`.
+
+    Só o administrador: não tem volta (nem pelos arquivos do disco) e vale para
+    qualquer unidade, então não fica com a coordenação de uma delas.
     """
     cidadao = Cidadao.vigentes.filter(id=cidadao_id).first()
     if cidadao is None:

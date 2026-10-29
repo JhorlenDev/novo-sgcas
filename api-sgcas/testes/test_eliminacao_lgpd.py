@@ -107,7 +107,7 @@ class _Cenario(CenarioBase):
         titular = titular or self.titular
         with override_settings(ARMAZENAMENTO_LOCAL=self.pasta):
             with self.captureOnCommitCallbacks(execute=True):
-                return self.como(operador or self.coordenador).delete(f'/api/citizens/{titular.id}/dados-pessoais')
+                return self.como(operador or self.admin).delete(f'/api/citizens/{titular.id}/dados-pessoais')
 
     def arquivos_no_disco(self):
         return [f for _, _, nomes in os.walk(self.pasta) for f in nomes]
@@ -197,7 +197,7 @@ class EliminacaoDosArquivos(_Cenario):
         # apontando para o vazio e nenhum dos dois recuperável.
         with override_settings(ARMAZENAMENTO_LOCAL=self.pasta):
             with self.captureOnCommitCallbacks(execute=False) as pendentes:
-                self.como(self.coordenador).delete(f'/api/citizens/{self.titular.id}/dados-pessoais')
+                self.como(self.admin).delete(f'/api/citizens/{self.titular.id}/dados-pessoais')
         self.assertEqual(len(self.arquivos_no_disco()), 2, 'apagou antes do commit')
         self.assertGreaterEqual(len(pendentes), 1)
 
@@ -257,20 +257,23 @@ class RegistrosLigados(_Cenario):
 
 
 class PermissaoEAuditoria(_Cenario):
-    def test_so_a_supervisao_elimina(self):
-        for operador in (self.recepcionista, self.tecnico, self.visualizador):
+    def test_so_o_admin_elimina(self):
+        # Eliminar é irreversível e apaga também os documentos do disco: fica com
+        # quem responde pelo sistema, não com a coordenação de uma unidade.
+        for operador in (self.coordenador, self.recepcionista, self.tecnico, self.visualizador, self.sem_unidade):
             resposta = self.eliminar(operador)
-            self.assertIn(resposta.status_code, (403, 404), operador.papel)  # 404: outra unidade/sem escopo
-            self.assertNotEqual(resposta.status_code, 200, operador.papel)
-        self.assertIsNone(Cidadao.objects.get(pk=self.titular.pk).excluido_em)
+            self.assertEqual(resposta.status_code, 403, operador.papel)
+        titular = Cidadao.objects.get(pk=self.titular.pk)
+        self.assertIsNone(titular.excluido_em)
+        self.assertEqual(len(self.arquivos_no_disco()), 2, 'os documentos não podem sair do disco')
 
-    def test_admin_e_coordenador_eliminam(self):
+    def test_o_admin_elimina(self):
         self.assertEqual(self.eliminar(self.admin).status_code, 200)
 
     def test_a_eliminacao_fica_na_trilha_sem_dado_pessoal(self):
         self.eliminar()
         registro = RegistroDeAuditoria.objects.get(acao='ERASURE', entidade_id=self.titular.id)
-        self.assertEqual(registro.operador_id, self.coordenador.id)
+        self.assertEqual(registro.operador_id, self.admin.id)
         texto = f'{registro.dados_antes} {registro.dados_depois}'
         for pessoal in ('Maria', '111.444', '12345678901', 'maria.titular'):
             self.assertNotIn(pessoal, texto)
