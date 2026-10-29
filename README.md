@@ -214,6 +214,8 @@ O arquivo `compose.dev.yml` expõe o banco **somente em `127.0.0.1:5434`** por p
 
 O comando `cadastrar_servicos` cria/atualiza coordenações, unidades, demandas e serviços do catálogo institucional. Ele é idempotente e não cria contas de acesso nem cidadãos de demonstração.
 
+Os benefícios eventuais dos três CRAS (**Auxílio maternidade**, **Auxílio funeral**, **Cesta básica** e **Auxílio em calamidade pública**) já saem do catálogo com a categoria "Benefício Eventual" e o tipo de auxílio: é isso que liga cada serviço ao aviso de repetição no balcão (e a regra de um ano do auxílio maternidade). As unidades não precisam cadastrar nada para isso valer. Como o comando roda a cada implantação, num serviço que já existe ele só **preenche** a categoria e o tipo quando estão vazios: o que a coordenação decidiu na tela Institucional ("Classificar") não é desfeito. Para incluir outro auxílio em todas as implantações, acrescente-o à lista `AUXILIOS` em `api-sgcas/apps/institucional/management/commands/cadastrar_servicos.py`.
+
 ### 4. Subir o frontend
 
 Em outro terminal, a partir da raiz do repositório:

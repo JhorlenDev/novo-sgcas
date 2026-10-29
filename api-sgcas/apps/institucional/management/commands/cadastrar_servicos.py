@@ -7,6 +7,15 @@ para montar um ambiente do zero quanto para incorporar um serviço novo depois.
 A fonte é a relação de serviços entregue pela Secretaria. Os do CREAS seguem a
 Tipificação Nacional dos Serviços Socioassistenciais — nomes padronizados, que
 é o que permite o dado alimentar o RMA sem tradução manual.
+
+Os benefícios eventuais dos CRAS (maternidade, funeral, cesta básica e
+calamidade) já saem com a categoria "Benefício Eventual" e o tipo de auxílio: é
+isso que liga o serviço ao controle de repetição no balcão, e deixar de
+cadastrar seria mandar cada unidade fazê-lo à mão.
+
+O comando roda a cada implantação. Por isso, num serviço que já existe, ele só
+**preenche** a categoria e o tipo quando estão vazios: o que a coordenação
+decidiu na tela Institucional ("Classificar") não é desfeito.
 """
 import uuid
 
@@ -16,7 +25,24 @@ from django.utils import timezone
 
 from apps.institucional.models import Coordenacao, Demanda, Servico, Unidade
 
-# (sigla da unidade, nome, tipo, [(serviço, descrição, categoria municipal)])
+# Os benefícios eventuais da LOAS (art. 22), um por tipo de auxílio do sistema.
+# (serviço, descrição, categoria municipal, tipo de auxílio)
+AUXILIOS = [
+    ('Auxílio maternidade',
+     'Benefício eventual por nascimento (auxílio-natalidade). Uma vez a cada 12 meses.',
+     'Benefício Eventual', 'SITUACAO_NASCIMENTO'),
+    ('Auxílio funeral',
+     'Benefício eventual por morte na família.',
+     'Benefício Eventual', 'SITUACAO_MORTE'),
+    ('Cesta básica',
+     'Benefício eventual de alimentação em situação de vulnerabilidade temporária.',
+     'Benefício Eventual', 'SITUACAO_VULNERABILIDADE_TEMPORARIA'),
+    ('Auxílio em calamidade pública',
+     'Benefício eventual para famílias atingidas por calamidade pública.',
+     'Benefício Eventual', 'SITUACAO_CALAMIDADE'),
+]
+
+# (sigla da unidade, nome, tipo, [(serviço, descrição, categoria municipal[, tipo de auxílio])])
 CATALOGO = [
     # ── CRAS ──────────────────────────────────────────────────────────
     (
@@ -35,6 +61,7 @@ CATALOGO = [
             ('Visita domiciliar', 'Visita técnica ao domicílio.', 'Acompanhamento Familiar'),
             ('Estudo psicossocial e laudos técnicos',
              'Elaboração de estudo psicossocial e documentos técnicos.', 'Violação de Direitos'),
+            *AUXILIOS,
         ],
     ),
     (
@@ -53,6 +80,7 @@ CATALOGO = [
             ('Visita domiciliar', 'Visita técnica ao domicílio.', 'Acompanhamento Familiar'),
             ('Estudo psicossocial e laudos técnicos',
              'Elaboração de estudo psicossocial e documentos técnicos.', 'Violação de Direitos'),
+            *AUXILIOS,
         ],
     ),
     (
@@ -71,6 +99,7 @@ CATALOGO = [
             ('Visita domiciliar', 'Visita técnica ao domicílio.', 'Acompanhamento Familiar'),
             ('Estudo psicossocial e laudos técnicos',
              'Elaboração de estudo psicossocial e documentos técnicos.', 'Violação de Direitos'),
+            *AUXILIOS,
         ],
     ),
     # ── CREAS ─────────────────────────────────────────────────────────
@@ -153,7 +182,7 @@ RAIZ_NOME = 'Secretaria Municipal de Assistência Social'
 
 # As categorias que o catálogo acima cita, na ordem em que aparecem.
 CATEGORIAS = list(dict.fromkeys(
-    categoria for *_, servicos in CATALOGO for _, _, categoria in servicos if categoria
+    categoria for *_, servicos in CATALOGO for _, _, categoria, *_ in servicos if categoria
 ))
 
 
@@ -222,7 +251,8 @@ class Command(BaseCommand):
                     unidade.atualizada_em = agora
                     unidade.save(update_fields=['coordenacao', 'atualizada_em'])
 
-            for nome_servico, descricao, categoria in servicos:
+            for nome_servico, descricao, categoria, *resto in servicos:
+                tipo_de_auxilio = resto[0] if resto else None
                 demanda = demandas.get(categoria) if categoria else None
                 if categoria and demanda is None:
                     self.stdout.write(self.style.WARNING(
@@ -231,15 +261,30 @@ class Command(BaseCommand):
                 if demanda is None:
                     sem_categoria += 1
 
-                # O id só existe na criação: em `defaults` ele trocaria a chave
-                # primária de um serviço já cadastrado, e os casos que apontam
-                # para ele ficariam soltos.
-                dados = {'descricao': descricao, 'demanda': demanda, 'ativo': True}
-                _, novo = Servico.objects.update_or_create(
-                    unidade=unidade, nome=nome_servico,
-                    defaults=dados, create_defaults={'id': str(uuid.uuid4()), **dados},
-                )
-                servicos_novos += int(novo)
+                servico = Servico.objects.filter(unidade=unidade, nome=nome_servico).first()
+                if servico is None:
+                    # O id só existe na criação: reescrevê-lo trocaria a chave primária de
+                    # um serviço já cadastrado, e os casos que apontam para ele ficariam soltos.
+                    Servico.objects.create(
+                        id=str(uuid.uuid4()), unidade=unidade, nome=nome_servico, descricao=descricao,
+                        demanda=demanda, tipo_de_beneficio=tipo_de_auxilio, ativo=True,
+                    )
+                    servicos_novos += 1
+                    continue
+
+                servico.descricao = descricao
+                servico.ativo = True
+                # A classificação só é preenchida quando falta: o que a coordenação decidiu na
+                # tela Institucional não pode ser desfeito a cada implantação. O tipo ainda
+                # exige que o serviço continue na categoria do catálogo, a única em que ele vale.
+                if servico.demanda_id is None and demanda is not None:
+                    servico.demanda = demanda
+                if (
+                    tipo_de_auxilio and not servico.tipo_de_beneficio
+                    and demanda is not None and servico.demanda_id == demanda.id
+                ):
+                    servico.tipo_de_beneficio = tipo_de_auxilio
+                servico.save()
 
         self.stdout.write('')
         if raiz_criada:
