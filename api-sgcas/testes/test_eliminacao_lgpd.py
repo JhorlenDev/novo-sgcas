@@ -42,9 +42,12 @@ RELATO = 'Relato do atendimento: família sem renda, visita agendada.'
 def _cadastro_completo(cenario, pasta, **extra) -> Cidadao:
     """Um cidadão com TUDO preenchido, inclusive dois arquivos reais em disco."""
     agora = timezone.now()
+    # CPF e e-mail são únicos (índice da cifragem): um segundo cadastro precisa dos seus.
+    unicos = {'cpf': '111.444.777-35', 'email': 'maria.titular@exemplo.local'}
+    unicos.update({campo: extra.pop(campo) for campo in tuple(unicos) if campo in extra})
     titular = Cidadao(
-        id=str(uuid.uuid4()), nome='Maria Titular da Silva', cpf='111.444.777-35', nis='12345678901',
-        email='maria.titular@exemplo.local', rg='1234567 SSP/AM', telefone='(97) 99999-0000',
+        id=str(uuid.uuid4()), nome='Maria Titular da Silva', nis='12345678901',
+        rg='1234567 SSP/AM', telefone='(97) 99999-0000', **unicos,
         endereco='Rua das Flores, 100',
         nascimento=datetime(1985, 3, 14, tzinfo=fuso.utc), sexo='FEMININO', naturalidade='Tefé',
         escolaridade='MEDIO_COMPLETO', identidade_de_genero='MULHER_CIS', raca='PARDA',
@@ -187,7 +190,7 @@ class EliminacaoDosArquivos(_Cenario):
         self.assertFalse(os.path.exists(pasta_do_titular))
 
     def test_nao_toca_nos_arquivos_de_outro_cidadao(self):
-        outro = _cadastro_completo(self, self.pasta)
+        outro = _cadastro_completo(self, self.pasta, cpf='222.555.888-46', email='outro@exemplo.local')
         self.eliminar()
         pasta_do_outro = os.path.join(self.pasta, 'cidadaos', outro.id)
         self.assertEqual(len(os.listdir(pasta_do_outro)), 2)
@@ -328,7 +331,9 @@ class CompletarEliminacoesAntigas(_Cenario):
     def test_so_toca_em_quem_foi_eliminado_pelo_sistema(self):
         # Um registro "excluído" por outro motivo (duplicado, por exemplo) não é
         # eliminação LGPD e não pode ser apagado às cegas.
-        outro = _cadastro_completo(self, self.pasta, excluido_em=timezone.now())
+        outro = _cadastro_completo(
+            self, self.pasta, excluido_em=timezone.now(), cpf='222.555.888-46', email='outro@exemplo.local',
+        )
         self._eliminacao_parcial_da_versao_antiga()
         self.rodar()
 

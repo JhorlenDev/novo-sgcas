@@ -5,7 +5,7 @@ O banco e o mesmo que o backend anterior usa: nao ha migracao de dados, e os
 modelos sao escritos sobre as tabelas existentes com `db_table`. Por isso o
 Django nao gerencia o esquema — `managed = False` nos modelos de dominio.
 """
-import warnings
+import base64
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -219,20 +219,46 @@ PRECADASTRO_CLIENT_ID = env('PRECADASTRO_CLIENT_ID', default='')
 PRECADASTRO_CLIENT_SECRET = env('PRECADASTRO_CLIENT_SECRET', default='')
 
 # --- Cifragem de PII ---
-PII_ENCRYPTION_ENABLED = env.bool('PII_ENCRYPTION_ENABLED', default=False)
+#
+# Em producao a cifragem e obrigatoria e vem ligada por padrao. Sem ela CPF, RG e e-mail
+# ficam em texto puro no banco, e quem le o banco (ou um backup) le todo mundo. Subir
+# assim "so por enquanto" e como esses dados acabam vazando, entao o boot recusa: melhor
+# um erro claro na implantacao do que descobrir depois. Em desenvolvimento segue opcional.
+PII_ENCRYPTION_ENABLED = env.bool('PII_ENCRYPTION_ENABLED', default=not DEBUG)
 PII_ENCRYPTION_KEY = env('PII_ENCRYPTION_KEY', default='')
 PII_HMAC_KEY = env('PII_HMAC_KEY', default='')
 
+_COMO_GERAR_CHAVE = 'python -c "import base64, os; print(base64.b64encode(os.urandom(32)).decode())"'
+
 if not DEBUG and not PII_ENCRYPTION_ENABLED:
-    # Não derruba o boot: ligar a cifragem exige chaves e, numa base com cadastros, o
-    # comando `cifrar_dados_pessoais`. Mas subir assim deixa CPF, RG e e-mail em texto
-    # puro no banco, e isso não pode passar em silêncio.
-    warnings.warn(
-        'PII_ENCRYPTION_ENABLED está desligado: os dados pessoais dos cidadãos ficam em texto '
-        'puro no banco. Em produção ligue-o (veja o .env.example e o README).',
-        RuntimeWarning,
-        stacklevel=1,
+    raise RuntimeError(
+        'PII_ENCRYPTION_ENABLED não pode ficar desligado em produção: os dados pessoais dos '
+        'cidadãos ficariam em texto puro no banco. Ligue-o e informe PII_ENCRYPTION_KEY e '
+        f'PII_HMAC_KEY (duas chaves diferentes; gere cada uma com: {_COMO_GERAR_CHAVE}).'
     )
+
+
+def _chave_de_32_bytes(valor: str) -> bool:
+    try:
+        return len(base64.b64decode(valor, validate=True)) == 32
+    except ValueError:
+        return False
+
+
+if PII_ENCRYPTION_ENABLED:
+    # Confere no boot, e sem repetir o valor na mensagem: uma chave errada so apareceria
+    # no primeiro cadastro salvo, e o erro de uma chave jamais deve ir parar no log.
+    for _nome, _valor in (('PII_ENCRYPTION_KEY', PII_ENCRYPTION_KEY), ('PII_HMAC_KEY', PII_HMAC_KEY)):
+        if not _chave_de_32_bytes(_valor):
+            raise RuntimeError(
+                f'{_nome} precisa ser uma chave de 32 bytes em base64 (está ausente ou inválida). '
+                f'Gere com: {_COMO_GERAR_CHAVE}'
+            )
+    if PII_ENCRYPTION_KEY == PII_HMAC_KEY:
+        raise RuntimeError(
+            'PII_ENCRYPTION_KEY e PII_HMAC_KEY precisam ser diferentes: quem descobrisse uma '
+            'teria a outra. Gere uma chave nova para cada.'
+        )
 
 KEYCLOAK_URL = env('KEYCLOAK_URL', default='')
 KEYCLOAK_REALM = env('KEYCLOAK_REALM', default='')

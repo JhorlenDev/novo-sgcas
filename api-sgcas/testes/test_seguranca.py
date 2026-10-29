@@ -5,6 +5,7 @@ que a reproduzia antes da correção.
 Os clientes imitam o navegador atrás do proxy do Next (`Origin` é o do front e
 `Host` é o da API), como em `test_csrf_sessao`.
 """
+import base64
 import os
 import subprocess
 import sys
@@ -409,19 +410,86 @@ class AnexoNaoSaiDaPasta(CenarioBase):
                 anexos.caminho(str(uuid.uuid4()), {'arquivo': '../pasta-do-cidadao-irma/segredo.jpg'})
 
 
-class AvisoDeCifraEmProducao(CenarioBase):
-    """Sem cifragem, CPF, RG e e-mail ficam em texto puro no banco: o boot avisa, alto."""
+class CifraDosDadosPessoaisEmProducao(CenarioBase):
+    """
+    Sem cifragem, CPF, RG e e-mail ficam em texto puro no banco, e quem lê o banco (ou um
+    backup) lê todo mundo. Em produção o boot recusa subir assim, ou com chaves que não
+    servem: descobrir isso no primeiro cadastro, com a API no ar, seria tarde.
+    """
 
-    def test_producao_sem_cifragem_avisa(self):
-        resultado = _importar_settings(DEBUG='False', DJANGO_SECRET_KEY='k' * 60, PII_ENCRYPTION_ENABLED='false')
-        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+    CHAVE_DE_CIFRA = base64.b64encode(os.urandom(32)).decode()
+    CHAVE_DO_INDICE = base64.b64encode(os.urandom(32)).decode()
+
+    def producao(self, **extra):
+        ambiente = {'DEBUG': 'False', 'DJANGO_SECRET_KEY': 'k' * 60}
+        ambiente.update(extra)
+        return _importar_settings(**ambiente)
+
+    def com_chaves(self, **extra):
+        return self.producao(
+            PII_ENCRYPTION_ENABLED='true', PII_ENCRYPTION_KEY=self.CHAVE_DE_CIFRA,
+            PII_HMAC_KEY=self.CHAVE_DO_INDICE, **extra,
+        )
+
+    def test_producao_sem_cifragem_nao_sobe(self):
+        resultado = self.producao(PII_ENCRYPTION_ENABLED='false', PII_ENCRYPTION_KEY='', PII_HMAC_KEY='')
+        self.assertNotEqual(resultado.returncode, 0)
         self.assertIn('PII_ENCRYPTION_ENABLED', resultado.stderr)
 
-    def test_producao_com_cifragem_nao_avisa(self):
-        resultado = _importar_settings(DEBUG='False', DJANGO_SECRET_KEY='k' * 60, PII_ENCRYPTION_ENABLED='true')
-        self.assertEqual(resultado.returncode, 0, resultado.stderr)
-        self.assertNotIn('PII_ENCRYPTION_ENABLED', resultado.stderr)
+    def test_producao_com_cifragem_mas_sem_chaves_nao_sobe(self):
+        resultado = self.producao(PII_ENCRYPTION_ENABLED='true', PII_ENCRYPTION_KEY='', PII_HMAC_KEY='')
+        self.assertNotEqual(resultado.returncode, 0)
+        self.assertIn('PII_ENCRYPTION_KEY', resultado.stderr)
 
-    def test_desenvolvimento_nao_avisa(self):
-        resultado = _importar_settings(DEBUG='True', PII_ENCRYPTION_ENABLED='false')
-        self.assertNotIn('PII_ENCRYPTION_ENABLED', resultado.stderr)
+    def test_chave_do_indice_ausente_nao_sobe(self):
+        resultado = self.producao(
+            PII_ENCRYPTION_ENABLED='true', PII_ENCRYPTION_KEY=self.CHAVE_DE_CIFRA, PII_HMAC_KEY='',
+        )
+        self.assertNotEqual(resultado.returncode, 0)
+        self.assertIn('PII_HMAC_KEY', resultado.stderr)
+
+    def test_chave_que_nao_tem_32_bytes_nao_sobe(self):
+        curta = base64.b64encode(os.urandom(16)).decode()
+        resultado = self.producao(
+            PII_ENCRYPTION_ENABLED='true', PII_ENCRYPTION_KEY=curta, PII_HMAC_KEY=self.CHAVE_DO_INDICE,
+        )
+        self.assertNotEqual(resultado.returncode, 0)
+        self.assertIn('PII_ENCRYPTION_KEY', resultado.stderr)
+
+    def test_chave_que_nao_e_base64_nao_sobe(self):
+        resultado = self.producao(
+            PII_ENCRYPTION_ENABLED='true', PII_ENCRYPTION_KEY='isto não é base64!', PII_HMAC_KEY=self.CHAVE_DO_INDICE,
+        )
+        self.assertNotEqual(resultado.returncode, 0)
+
+    def test_a_mesma_chave_para_cifrar_e_para_o_indice_nao_sobe(self):
+        # Quem descobrisse uma teria a outra.
+        resultado = self.producao(
+            PII_ENCRYPTION_ENABLED='true', PII_ENCRYPTION_KEY=self.CHAVE_DE_CIFRA, PII_HMAC_KEY=self.CHAVE_DE_CIFRA,
+        )
+        self.assertNotEqual(resultado.returncode, 0)
+        self.assertIn('diferentes', resultado.stderr)
+
+    def test_a_mensagem_de_erro_nao_revela_a_chave(self):
+        resultado = self.producao(
+            PII_ENCRYPTION_ENABLED='true', PII_ENCRYPTION_KEY=self.CHAVE_DE_CIFRA, PII_HMAC_KEY=self.CHAVE_DE_CIFRA,
+        )
+        self.assertNotIn(self.CHAVE_DE_CIFRA, resultado.stderr)
+
+    def test_producao_com_cifragem_e_chaves_boas_sobe_sem_aviso(self):
+        resultado = self.com_chaves()
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+        self.assertNotIn('PII_', resultado.stderr)
+
+    def test_desenvolvimento_pode_rodar_sem_cifragem(self):
+        resultado = _importar_settings(
+            DEBUG='True', PII_ENCRYPTION_ENABLED='false', PII_ENCRYPTION_KEY='', PII_HMAC_KEY='',
+        )
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+
+    def test_desenvolvimento_com_cifragem_ligada_e_chave_ruim_falha_cedo(self):
+        resultado = _importar_settings(
+            DEBUG='True', PII_ENCRYPTION_ENABLED='true', PII_ENCRYPTION_KEY='', PII_HMAC_KEY='',
+        )
+        self.assertNotEqual(resultado.returncode, 0)
+        self.assertIn('PII_ENCRYPTION_KEY', resultado.stderr)

@@ -43,7 +43,7 @@ from apps.cidadaos.serializers import (
 )
 import uuid
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils.html import escape
 from django.utils import timezone
 
@@ -555,6 +555,28 @@ def verificar_duplicidade(request, cidadao_id: str):
     return Response({'alertas': alertas, 'exige_justificativa': bool(alertas)})
 
 
+def _resposta_de_documento_repetido(cidadao: Cidadao):
+    """
+    409 dizendo qual documento já tem dono, ou `None` se a colisão foi de outra coluna.
+
+    Com a cifragem ligada, CPF e e-mail têm índice único. Sem tratar isso o atendente
+    veria um erro 500 e não saberia que a pessoa já está cadastrada.
+    """
+    for rotulo, coluna in (('CPF', 'cpf_indice'), ('e-mail', 'email_indice')):
+        indice = getattr(cidadao, coluna)
+        if not indice:
+            continue
+        existente = Cidadao.objects.filter(**{coluna: indice}).first()
+        if existente is None:
+            continue
+        corpo = {'detalhe': f'Já existe um cadastro com este {rotulo}.'}
+        # Cadastro arquivado não é para abrir: só o aviso.
+        if existente.excluido_em is None:
+            corpo['cidadaoId'] = existente.id
+        return Response(corpo, status=status.HTTP_409_CONFLICT)
+    return None
+
+
 @api_view(['POST'])
 @permission_classes([Recepcao])
 @transaction.atomic
@@ -582,7 +604,16 @@ def cadastrar(request):
         consentiu_tefe_cidadao_em=agora if consentiu else None,
         criado_em=agora, atualizado_em=agora,
     )
-    cidadao.save(force_insert=True)
+    try:
+        # Em savepoint próprio: a colisão de índice estraga a transação em curso, e a
+        # busca do cadastro existente, logo abaixo, precisa de uma transação viva.
+        with transaction.atomic():
+            cidadao.save(force_insert=True)
+    except IntegrityError:
+        repetido = _resposta_de_documento_repetido(cidadao)
+        if repetido is None:
+            raise
+        return repetido
 
     acesso = None
     if quer_acesso:

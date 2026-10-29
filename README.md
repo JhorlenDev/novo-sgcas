@@ -180,7 +180,13 @@ cp .env.example .env
 python -c "import secrets; print(secrets.token_urlsafe(64))"
 ```
 
-Use a chave gerada em `DJANGO_SECRET_KEY`. Edite o `.env` e configure o banco com **a mesma senha** em `POSTGRES_PASSWORD` e `DATABASE_URL`:
+Use a chave gerada em `DJANGO_SECRET_KEY`. Gere também as duas chaves da cifragem dos dados pessoais (rode o comando duas vezes e cole cada resultado em `PII_ENCRYPTION_KEY` e `PII_HMAC_KEY`; se preferir rodar sem cifragem no seu computador, ponha `PII_ENCRYPTION_ENABLED=false`):
+
+```bash
+python -c "import base64, os; print(base64.b64encode(os.urandom(32)).decode())"
+```
+
+Edite o `.env` e configure o banco com **a mesma senha** em `POSTGRES_PASSWORD` e `DATABASE_URL`:
 
 ```dotenv
 DEBUG=True
@@ -342,8 +348,8 @@ O modelo completo está em [`api-sgcas/.env.example`](api-sgcas/.env.example).
 | `POSTGRES_PORT` | Porta local do banco no `compose.dev.yml` |
 | `API_PORT` | Porta publicada da API Docker; padrão `8000` |
 | `API_BIND_ADDRESS` | Interface em que a porta da API Docker é publicada; padrão `127.0.0.1`. Só o Next e o nginx da mesma máquina a alcançam. Nunca use `0.0.0.0` em produção |
-| `PII_ENCRYPTION_ENABLED` | Ativa cifragem de dados pessoais |
-| `PII_ENCRYPTION_KEY`, `PII_HMAC_KEY` | Chaves distintas de cifragem e índice de busca |
+| `PII_ENCRYPTION_ENABLED` | Cifragem dos dados pessoais. **Obrigatória em produção** (padrão `true` com `DEBUG=False`; a API não sobe sem ela). Em desenvolvimento pode ser `false` |
+| `PII_ENCRYPTION_KEY`, `PII_HMAC_KEY` | Duas chaves **diferentes** de 32 bytes em base64: cifragem e índice de busca. A API confere no boot e não sobe com chave ausente, inválida ou repetida |
 | `PRECADASTRO_ENABLED` | Ativa integração de pré-cadastro no Tefé Cidadão |
 | `PRECADASTRO_CLIENT_ID`, `PRECADASTRO_CLIENT_SECRET` | Conta de serviço dessa integração |
 | `SGCAS_API_URL` | Destino do proxy Next.js; padrão `http://localhost:8000` |
@@ -384,8 +390,8 @@ Há também scripts de navegador em `front-sgcas/scripts/`. Eles têm requisitos
 ## Produção
 
 1. Configure domínios, HTTPS e proxy reverso. Use [`deploy/nginx/sgcas.conf`](deploy/nginx/sgcas.conf) como ponto de partida (testada no nginx 1.30): troque o domínio e os caminhos dos certificados, copie para `/etc/nginx/conf.d/`, rode `nginx -t` e recarregue. Com `DEBUG=False`, a API exige HTTPS e usa cookies seguros; o proxy deve encaminhar `X-Forwarded-Proto` e `X-Forwarded-For`, como essa configuração faz.
-2. Preencha segredos reais, `ALLOWED_HOSTS`, `FRONTEND_URL` e callback do Keycloak. Nunca publique `.env`. Atenção a dois valores: `ALLOWED_HOSTS` deve conter o host de `SGCAS_API_URL` (por exemplo `localhost`), **não** o domínio público, porque o Next troca o `Host` ao encaminhar para a API; e `FRONTEND_URL` deve ser a origem pública com `https` (por exemplo `https://sgcas.exemplo.gov.br`), pois também define a origem aceita pela proteção CSRF.
-3. Faça backup do PostgreSQL, dos anexos e das chaves de cifragem, quando utilizadas.
+2. Gere e preencha as **duas chaves da cifragem dos dados pessoais** (`PII_ENCRYPTION_KEY` e `PII_HMAC_KEY`, comando em [Cifragem de dados pessoais](#cifragem-de-dados-pessoais)): em produção a API não sobe sem elas. Preencha também segredos reais, `ALLOWED_HOSTS`, `FRONTEND_URL` e callback do Keycloak. Nunca publique `.env`. Atenção a dois valores: `ALLOWED_HOSTS` deve conter o host de `SGCAS_API_URL` (por exemplo `localhost`), **não** o domínio público, porque o Next troca o `Host` ao encaminhar para a API; e `FRONTEND_URL` deve ser a origem pública com `https` (por exemplo `https://sgcas.exemplo.gov.br`), pois também define a origem aceita pela proteção CSRF.
+3. Faça backup do PostgreSQL, dos anexos e **das chaves de cifragem, guardadas em lugar diferente do backup do banco**: sem elas os dados pessoais não podem ser recuperados.
 4. Construa a API e execute as migrations **antes** de iniciar a nova versão:
 
    ```bash
@@ -418,20 +424,20 @@ O frontend deve ser mantido por um gerenciador de processos ou plataforma de hos
 
 ### Cifragem de dados pessoais
 
-A cifragem vem desligada. Para ativar, gere duas chaves diferentes, uma por execução:
+A cifragem é **obrigatória em produção**: com `DEBUG=False` a API se recusa a subir com ela desligada, ou com chaves ausentes, inválidas ou iguais (a mensagem de erro diz o que falta). Em desenvolvimento ela é opcional. Para ativar, gere duas chaves diferentes, uma por execução:
 
 ```bash
 python -c "import base64, os; print(base64.b64encode(os.urandom(32)).decode())"
 ```
 
-Preencha `PII_ENCRYPTION_KEY` e `PII_HMAC_KEY`, configure `PII_ENCRYPTION_ENABLED=true` e execute, no ambiente da API:
+Preencha `PII_ENCRYPTION_KEY` e `PII_HMAC_KEY` e, numa base que **já tem cadastros** (por exemplo, um banco de desenvolvimento que estava sem cifragem), execute, no ambiente da API:
 
 ```bash
 python manage.py cifrar_dados_pessoais --simular
 python manage.py cifrar_dados_pessoais
 ```
 
-Em uma base existente, essa atualização também prepara os índices de busca por documentos. Preserve cópias seguras das chaves fora do servidor: sua perda impede a recuperação dos dados cifrados.
+Em uma base existente, essa atualização também prepara os índices de busca por documentos. Numa base nova, em produção, não há o que migrar: tudo já é gravado cifrado. **Não troque as chaves depois de gravar dados** e preserve cópias seguras delas fora do servidor (e longe do backup do banco): a perda das chaves impede a recuperação dos dados cifrados, e um backup do banco sem elas não serve para nada.
 
 ### Eliminação de dados pessoais (LGPD)
 

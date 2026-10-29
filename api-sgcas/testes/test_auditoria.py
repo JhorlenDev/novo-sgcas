@@ -103,9 +103,9 @@ class AuditoriaComCorpoGrande(CenarioBase):
     def test_json_pequeno_continua_auditado_com_redacao(self):
         self.como(self.recepcionista).post(
             '/api/citizens/novo',
-            {'nome': 'Pessoa Auditada', 'email': 'auditada@teste.local', 'cpf': '529.982.247-25',
+            {'nome': 'Pessoa Auditada', 'email': 'auditada@teste.local', 'cpf': '111.444.777-35',
              'criar_acesso_tefe_cidadao': False},
             content_type='application/json',
         )
         registro = RegistroDeAuditoria.objects.filter(acao='CREATE', entidade='citizens').first()
-        self.assertEqual(registro.dados_depois['cpf'], '***.***.***-25')
+        self.assertEqual(registro.dados_depois['cpf'], '***.***.***-35')

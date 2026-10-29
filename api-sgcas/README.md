@@ -124,14 +124,16 @@ endpoints que usam as colunas novas falham em tempo de requisição.
 
 ### Cifragem dos dados pessoais
 
-Desligada por padrão. Para ligar, gere **duas** chaves distintas:
+Obrigatória em produção: com `DEBUG=False` a API não sobe com a cifragem desligada nem
+com as chaves ausentes, inválidas ou iguais. Em desenvolvimento é opcional. Gere **duas**
+chaves distintas:
 
 ```bash
 python -c "import base64, os; print(base64.b64encode(os.urandom(32)).decode())"
 ```
 
-Preencha `PII_ENCRYPTION_KEY` e `PII_HMAC_KEY`, ponha `PII_ENCRYPTION_ENABLED=true`
-e rode o backfill:
+Preencha `PII_ENCRYPTION_KEY` e `PII_HMAC_KEY` (e `PII_ENCRYPTION_ENABLED=true`, que em
+produção já é o padrão) e, se o banco já tem cadastros, rode o backfill:
 
 ```bash
 docker compose run --rm api python manage.py cifrar_dados_pessoais --simular
@@ -320,6 +322,6 @@ set -a; . ./.env; set +a
 
 - Não commite `.env`.
 - Use `.env.example` como base.
-- Dados sensíveis de cidadão podem ser cifrados ativando `PII_ENCRYPTION_ENABLED` —
-  numa base já povoada, rode `manage.py cifrar_dados_pessoais` logo em seguida.
+- Os dados sensíveis de cidadão são cifrados (`PII_ENCRYPTION_ENABLED`, obrigatório em
+  produção) — numa base já povoada, rode `manage.py cifrar_dados_pessoais` logo em seguida.
 - Antes de produção, revise migrations e variáveis do Keycloak.
