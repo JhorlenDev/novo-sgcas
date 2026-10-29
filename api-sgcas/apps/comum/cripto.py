@@ -19,6 +19,7 @@ import base64
 import hashlib
 import hmac
 import os
+import re
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from django.conf import settings
@@ -105,3 +106,18 @@ def indice_cego(texto: str | None) -> str | None:
         return None
     normalizado = texto.strip().lower().encode()
     return hmac.new(_chave('PII_HMAC_KEY'), normalizado, hashlib.sha256).hexdigest()
+
+
+def indice_de_documento(texto: str | None) -> str | None:
+    """
+    Índice cego de CPF ou NIS: calculado só sobre os dígitos.
+
+    O cadastro guarda o documento como foi digitado e quem busca digita de outro
+    jeito — "529.982.247-25" num e "52998224725" no outro. Pelo texto, seriam duas
+    pessoas diferentes: a busca não acharia e a trava de CPF repetido não pegaria.
+    Pelos dígitos, as duas grafias são o mesmo documento.
+
+    Sem nenhum dígito (campo com "não tem", por exemplo) não há documento a indexar.
+    """
+    digitos = re.sub(r'\D+', '', texto or '')
+    return indice_cego(digitos) if digitos else None

@@ -437,7 +437,7 @@ python manage.py cifrar_dados_pessoais --simular
 python manage.py cifrar_dados_pessoais
 ```
 
-Em uma base existente, essa atualização também prepara os índices de busca por documentos. Numa base nova, em produção, não há o que migrar: tudo já é gravado cifrado. **Não troque as chaves depois de gravar dados** e preserve cópias seguras delas fora do servidor (e longe do backup do banco): a perda das chaves impede a recuperação dos dados cifrados, e um backup do banco sem elas não serve para nada.
+Em uma base existente, essa atualização também prepara os índices de busca por documentos. O índice de CPF e NIS é calculado só sobre os **dígitos**: a busca acha o cadastro digitando com ou sem pontos e traço, qualquer que seja a forma em que ele foi gravado, e o mesmo CPF com e sem máscara conta como o mesmo cadastro (cadastro repetido devolve 409). O comando também refaz sozinho os índices gravados antes dessa regra, então rode-o de novo ao atualizar o código numa base que já tinha cifragem. Numa base nova, em produção, não há o que migrar: tudo já é gravado cifrado. **Não troque as chaves depois de gravar dados** e preserve cópias seguras delas fora do servidor (e longe do backup do banco): a perda das chaves impede a recuperação dos dados cifrados, e um backup do banco sem elas não serve para nada.
 
 ### Eliminação de dados pessoais (LGPD)
 

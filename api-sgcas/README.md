@@ -169,6 +169,11 @@ O backfill não é opcional numa base que já tem cadastros: com a cifragem liga
 a busca por documento passa a usar índice cego, e quem foi gravado antes não tem
 índice — sumiria da consulta por CPF, NIS e e-mail sem erro nenhum na tela.
 
+O índice de CPF e NIS é calculado sobre os dígitos, então a busca acha o cadastro com ou sem
+pontos e traço, e o mesmo CPF nas duas grafias é um cadastro só. O comando também refaz os
+índices gravados antes dessa regra: rode-o de novo ao atualizar o código numa base que já
+tinha cifragem (`--simular` mostra quantos serão refeitos).
+
 **Guarde as chaves fora do servidor.** Sem elas não há como decifrar o que já
 foi gravado.
 

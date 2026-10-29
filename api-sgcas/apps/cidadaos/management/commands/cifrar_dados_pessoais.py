@@ -10,10 +10,14 @@ Como funciona: com a cifragem ligada, ler um valor em texto puro devolve o
 próprio texto (`decifrar` só age no formato `v1:`), e gravá-lo de volta o cifra
 e preenche o índice. Reler e regravar cada cidadão é, portanto, todo o trabalho.
 
-Idempotente: percorre só quem ainda tem coluna em texto puro, então rodar de
-novo numa base já migrada não grava nada. Atualiza apenas as colunas de dado
-pessoal, para não mexer em `atualizado_em` — essa data é do atendimento, não
-da manutenção.
+Também refaz o índice de quem o tem desatualizado. O índice de CPF e NIS é
+calculado sobre os dígitos (ver `cripto.indice_de_documento`); o que foi indexado
+sobre o texto com pontos e traço, antes disso, não é achado pela busca sem eles.
+
+Idempotente: percorre só quem tem coluna em texto puro ou índice fora do esperado,
+então rodar de novo numa base já migrada não grava nada. Atualiza apenas as colunas
+de dado pessoal, para não mexer em `atualizado_em` — essa data é do atendimento,
+não da manutenção.
 """
 from __future__ import annotations
 
@@ -54,11 +58,14 @@ class Command(BaseCommand):
         cripto.cifrar('teste-de-chave')
         cripto.indice_cego('teste-de-chave')
 
-        pendentes = self._pks_em_texto_puro()
+        em_texto_puro = self._pks_em_texto_puro()
+        a_reindexar = self._pks_com_indice_desatualizado()
+        pendentes = list(dict.fromkeys(em_texto_puro + a_reindexar))
         total = Cidadao.objects.count()
 
         self.stdout.write(f'cadastros na base      : {total}')
-        self.stdout.write(f'com dado em texto puro : {len(pendentes)}')
+        self.stdout.write(f'com dado em texto puro : {len(em_texto_puro)}')
+        self.stdout.write(f'com índice a refazer   : {len(a_reindexar)}')
 
         if opcoes['simular']:
             self.stdout.write(self.style.WARNING('simulação — nada foi gravado'))
@@ -111,3 +118,23 @@ class Command(BaseCommand):
                 [f'{cripto.VERSAO}:%'] * len(colunas),
             )
             return [linha[0] for linha in cursor.fetchall()]
+
+    def _pks_com_indice_desatualizado(self) -> list[str]:
+        """
+        Ids cujo índice cego difere do que o valor atual produz.
+
+        Lê pelo modelo, que já entrega o valor decifrado, e compara com o índice
+        que `save()` gravaria. Pega o índice calculado sobre o texto com máscara,
+        o índice que falta e o que sobrou de um valor apagado.
+        """
+        desatualizados = []
+        for cidadao in Cidadao.objects.only(
+            'id', 'cpf', 'cpf_indice', 'nis', 'nis_indice', 'email', 'email_indice',
+        ).iterator(chunk_size=LOTE):
+            if (
+                cidadao.cpf_indice != cripto.indice_de_documento(cidadao.cpf)
+                or cidadao.nis_indice != cripto.indice_de_documento(cidadao.nis)
+                or cidadao.email_indice != cripto.indice_cego(cidadao.email)
+            ):
+                desatualizados.append(cidadao.pk)
+        return desatualizados

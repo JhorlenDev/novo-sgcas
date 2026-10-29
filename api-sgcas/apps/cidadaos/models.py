@@ -7,6 +7,7 @@ colunas em texto puro seguem no esquema por herança do período anterior à
 cifragem — são lidas, mas não recebem valor novo.
 """
 from django.db import models
+from django.db.models import F, Func, Value
 import re
 
 from apps.cidadaos.campos import CampoCifrado
@@ -34,24 +35,33 @@ class GerenciadorDeCidadaos(models.Manager):
         if not termo:
             return self.none()
 
-        apenas_digitos = re.sub(r'\D+', '', termo)
-        termos = {termo}
-        if apenas_digitos:
-            termos.add(apenas_digitos)
+        digitos = re.sub(r'\D+', '', termo)
 
         if not cripto.habilitada():
-            return self.filter(
-                models.Q(cpf__in=termos)
-                | models.Q(nis__in=termos)
-                | models.Q(email__iexact=termo)
-            )
+            # Compara só os dígitos do que está gravado, para que "529.982.247-25" e
+            # "52998224725" sejam o mesmo documento, como no índice cego.
+            consulta = models.Q(email__iexact=termo)
+            if digitos:
+                consulta |= (
+                    models.Q(cpf_so_digitos=digitos) | models.Q(nis_so_digitos=digitos)
+                )
+            return self.annotate(
+                cpf_so_digitos=_so_digitos('cpf'), nis_so_digitos=_so_digitos('nis'),
+            ).filter(consulta)
 
-        indices = [cripto.indice_cego(item) for item in termos]
-        return self.filter(
-            models.Q(cpf_indice__in=indices)
-            | models.Q(nis_indice__in=indices)
-            | models.Q(email_indice=cripto.indice_cego(termo))
-        )
+        consulta = models.Q(email_indice=cripto.indice_cego(termo))
+        if digitos:
+            documento = cripto.indice_de_documento(digitos)
+            consulta |= models.Q(cpf_indice=documento) | models.Q(nis_indice=documento)
+        return self.filter(consulta)
+
+
+def _so_digitos(campo: str):
+    """Os dígitos da coluna, sem pontos, traço ou espaços (regexp_replace do Postgres)."""
+    return Func(
+        F(campo), Value(r'\D'), Value(''), Value('g'),
+        function='regexp_replace', output_field=models.TextField(),
+    )
 
 
 class Cidadao(models.Model):
@@ -150,8 +160,8 @@ class Cidadao(models.Model):
     def save(self, *args, **kwargs):
         """Mantém os índices cegos coerentes com os valores cifrados."""
         if cripto.habilitada():
-            self.cpf_indice = cripto.indice_cego(self.cpf)
-            self.nis_indice = cripto.indice_cego(self.nis)
+            self.cpf_indice = cripto.indice_de_documento(self.cpf)
+            self.nis_indice = cripto.indice_de_documento(self.nis)
             self.email_indice = cripto.indice_cego(self.email)
 
             campos = kwargs.get('update_fields')

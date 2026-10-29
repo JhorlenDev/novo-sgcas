@@ -65,16 +65,16 @@ class Backfill(TestCase):
         encontrados = Cidadao.vigentes.por_documento('529.982.247-25')
         self.assertEqual([c.pk for c in encontrados], [pk])
 
-    def test_indexa_o_documento_na_forma_em_que_esta_gravado(self):
-        # O indice cego e do valor como esta na coluna: gravado com pontuacao,
-        # so a busca com pontuacao encontra. Vale igual para cadastro novo — o
-        # backfill reproduz o comportamento do save(), nao um proprio.
+    def test_indexa_o_documento_pelos_digitos(self):
+        # O indice cego e dos digitos: gravado com pontuacao, a busca com ou sem
+        # pontuacao encontra. Vale igual para cadastro novo — o backfill
+        # reproduz o comportamento do save(), nao um proprio.
         grava_em_texto_puro('Ana', '529.982.247-25')
 
         call_command('cifrar_dados_pessoais', stdout=StringIO())
 
         self.assertTrue(Cidadao.vigentes.por_documento('529.982.247-25').exists())
-        self.assertFalse(Cidadao.vigentes.por_documento('52998224725').exists())
+        self.assertTrue(Cidadao.vigentes.por_documento('52998224725').exists())
 
     def test_alcanca_cadastro_excluido_logicamente(self):
         # Excluído logicamente ainda guarda o dado pessoal da pessoa: deixá-lo
