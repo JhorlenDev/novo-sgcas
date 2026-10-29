@@ -256,6 +256,12 @@ export default function RecepcaoPage() {
       <PageHeader
         title="Recepção"
         description="Busque a pessoa, confira o histórico e registre a chegada ou o encaminhamento para o atendimento."
+        action={
+          <Link href="/cidadaos/novo" className="button secondary">
+            <UserPlus size={16} aria-hidden="true" />
+            Novo cidadão
+          </Link>
+        }
       />
 
       <PainelResumoRecepcao painel={painel} />
@@ -274,7 +280,7 @@ export default function RecepcaoPage() {
             }}
           >
             <Search size={16} aria-hidden="true" />
-            Buscar<span className="max-sm:hidden">&nbsp;cidadão</span>
+            <span>Buscar<span className="max-sm:hidden"> cidadão</span></span>
           </Aba>
           <Aba ativa={aba === "recentes"} onClick={() => setAba("recentes")}>
             <Clock3 size={16} aria-hidden="true" />
