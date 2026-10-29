@@ -2,58 +2,86 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   ArrowLeftRight,
-  ChevronLeft,
-  ChevronRight,
-  ClipboardList,
   Building2,
-  MapPinned,
-  Headset,
+  ConciergeBell,
+  FolderOpen,
+  HeartHandshake,
+  Landmark,
   LayoutDashboard,
   LogOut,
+  MapPinned,
   Menu,
-  Search,
-  Shield,
-  Sparkles,
-  Stethoscope,
+  PanelLeftClose,
+  PanelLeftOpen,
+  TriangleAlert,
+  UserCog,
   Users,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { defaultRouteForRole, useAuth } from "@/lib/auth";
 import { useResumoDosAvisos } from "@/lib/avisos";
+import { rotuloDoPapel } from "@/lib/papeis";
 import { SessionLoading } from "@/components/shared/session-loading";
 
-const navItems = [
-  { href: "/dashboard", label: "Painel", icon: LayoutDashboard },
-  { href: "/cidadaos", label: "Cidadãos", icon: Search },
-  { href: "/recepcao", label: "Recepção", icon: Headset },
-  { href: "/fila", label: "Atendimento", icon: Stethoscope },
-  { href: "/casos", label: "Acompanhamentos", icon: ClipboardList },
+type ItemDeMenu = { href: string; label: string; icon: LucideIcon; roles?: string[] };
+type SecaoDeMenu = { titulo?: string; itens: ItemDeMenu[] };
+
+const EQUIPE_E_RECEPCAO = ["ADMIN", "COORDENADOR", "ASSISTENTE_SOCIAL", "TECNICO", "RECEPCIONISTA", "GESTOR_ACOES_ITINERANTES"];
+
+// O menu segue o caminho do trabalho: receber, atender, acompanhar e encaminhar;
+// depois os cadastros e, por último, a administração.
+const secoes: SecaoDeMenu[] = [
+  { itens: [{ href: "/dashboard", label: "Painel", icon: LayoutDashboard }] },
   {
-    href: "/encaminhamentos",
-    label: "Encaminhamentos",
-    icon: ArrowLeftRight,
-    roles: ["ADMIN", "COORDENADOR", "ASSISTENTE_SOCIAL", "TECNICO", "RECEPCIONISTA", "GESTOR_ACOES_ITINERANTES"],
+    titulo: "Atendimento",
+    itens: [
+      { href: "/recepcao", label: "Recepção", icon: ConciergeBell },
+      { href: "/fila", label: "Atendimento", icon: HeartHandshake },
+      { href: "/casos", label: "Acompanhamentos", icon: FolderOpen },
+      { href: "/encaminhamentos", label: "Encaminhamentos", icon: ArrowLeftRight, roles: EQUIPE_E_RECEPCAO },
+    ],
   },
-  { href: "/acoes-itinerantes", label: "Ações itinerantes", icon: MapPinned, roles: ["ADMIN", "GESTOR_ACOES_ITINERANTES"] },
-  { href: "/institucional", label: "Institucional", icon: Building2, roles: ["ADMIN", "COORDENADOR"] },
-  { href: "/admin", label: "Usuários", icon: Users, roles: ["ADMIN", "COORDENADOR"] },
+  {
+    titulo: "Cadastros",
+    itens: [
+      { href: "/cidadaos", label: "Cidadãos", icon: Users },
+      { href: "/acoes-itinerantes", label: "Ações itinerantes", icon: MapPinned, roles: ["ADMIN", "GESTOR_ACOES_ITINERANTES"] },
+    ],
+  },
+  {
+    titulo: "Administração",
+    itens: [
+      { href: "/institucional", label: "Institucional", icon: Building2, roles: ["ADMIN", "COORDENADOR"] },
+      { href: "/admin", label: "Usuários", icon: UserCog, roles: ["ADMIN", "COORDENADOR"] },
+    ],
+  },
 ];
+
+const todosOsItens = secoes.flatMap((secao) => secao.itens);
+
+function estaAtivo(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading, logout } = useAuth();
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [gavetaAberta, setGavetaAberta] = useState(false);
+  const [recolhido, setRecolhido] = useState(false);
   const { resumo } = useResumoDosAvisos(user?.papel);
   // O que pede a atenção da unidade: o que aguarda resposta e o que não foi lido.
   const pendencias = resumo ? resumo.encaminhamentos_pendentes + resumo.avisos_nao_lidos : 0;
+
+  const atual = todosOsItens.find((item) => estaAtivo(pathname, item.href));
+  const tituloDaPagina = atual?.label ?? "SGCAS";
 
   useEffect(() => {
     if (!loading && !user) {
@@ -63,16 +91,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setSidebarCollapsed(window.localStorage.getItem("sgcas-sidebar-collapsed") === "true");
+      setRecolhido(window.localStorage.getItem("sgcas-sidebar-collapsed") === "true");
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
 
-  function toggleSidebar() {
-    setSidebarCollapsed((current) => {
-      const next = !current;
-      window.localStorage.setItem("sgcas-sidebar-collapsed", String(next));
-      return next;
+  // Cada tela diz o próprio nome na aba do navegador e no histórico.
+  useEffect(() => {
+    document.title = `${tituloDaPagina} · SGCAS`;
+  }, [tituloDaPagina]);
+
+  // A gaveta é do celular e do tablet: ao ampliar a janela até o menu fixo, ela precisa fechar.
+  useEffect(() => {
+    const consulta = window.matchMedia("(min-width: 1024px)");
+    const aoMudar = (evento: MediaQueryListEvent) => {
+      if (evento.matches) setGavetaAberta(false);
+    };
+    consulta.addEventListener("change", aoMudar);
+    return () => consulta.removeEventListener("change", aoMudar);
+  }, []);
+
+  function alternarMenu() {
+    setRecolhido((atualmente) => {
+      const proximo = !atualmente;
+      window.localStorage.setItem("sgcas-sidebar-collapsed", String(proximo));
+      return proximo;
     });
   }
 
@@ -84,241 +127,289 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  const initials =
+  const iniciais =
     user.nome
       ?.split(" ")
-      .map((part) => part[0])
+      .filter(Boolean)
+      .map((parte) => parte[0])
       .slice(0, 2)
       .join("")
       .toUpperCase() || "??";
-  const current = navItems.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
-  const pageTitle = current?.label ?? "SGCAS";
 
   return (
     <div className="min-h-screen bg-meta-warm-gray">
-      <Sidebar
+      <a
+        href="#conteudo"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[60] focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary focus:shadow-elevated"
+      >
+        Ir para o conteúdo
+      </a>
+
+      <MenuFixo
         pathname={pathname}
         homeHref={defaultRouteForRole(user.papel)}
-        role={user.papel}
-        collapsed={sidebarCollapsed}
-        onToggle={toggleSidebar}
-        pendencias={pendencias}
-      />
-      <MobileSidebar
-        pathname={pathname}
-        homeHref={defaultRouteForRole(user.papel)}
-        role={user.papel}
-        open={mobileOpen}
-        onClose={() => setMobileOpen(false)}
+        papel={user.papel}
+        recolhido={recolhido}
+        onAlternar={alternarMenu}
         pendencias={pendencias}
       />
 
-      <div className={cn("transition-[padding] duration-300", sidebarCollapsed ? "md:pl-20" : "md:pl-64")}>
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-4 border-b border-meta-divider/70 px-4 frosted-nav md:px-8">
-          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileOpen(true)}>
-            <Menu className="h-5 w-5" />
-          </Button>
+      <Gaveta
+        aberta={gavetaAberta}
+        onAbertaChange={setGavetaAberta}
+        pathname={pathname}
+        homeHref={defaultRouteForRole(user.papel)}
+        papel={user.papel}
+        pendencias={pendencias}
+      />
 
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-            <span className="truncate text-base font-semibold text-meta-charcoal md:text-lg">{pageTitle}</span>
+      <div className={cn("transition-[padding] duration-200", recolhido ? "lg:pl-[4.5rem]" : "lg:pl-64")}>
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-meta-divider bg-white px-3 sm:gap-3 sm:px-4 lg:px-8">
+          <button
+            type="button"
+            onClick={() => setGavetaAberta(true)}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-meta-charcoal transition-colors hover:bg-meta-soft-gray lg:hidden"
+            aria-label="Abrir menu"
+          >
+            <Menu className="h-5 w-5" aria-hidden="true" />
+          </button>
+
+          {/* Celular e tablet: o título da tela, com a unidade logo abaixo. */}
+          <div className="min-w-0 flex-1 lg:hidden">
+            <p className="truncate text-[15px] font-semibold leading-tight text-meta-charcoal">{tituloDaPagina}</p>
+            {user.unidade && <p className="truncate text-xs leading-tight text-meta-slate">{user.unidade.nome}</p>}
           </div>
 
-          <div className="flex-1" />
-
-          <div className="flex items-center gap-4">
+          {/* Computador: a unidade onde a pessoa está trabalhando. */}
+          <div className="hidden min-w-0 flex-1 lg:block">
             {user.unidade ? (
-              <span className="hidden rounded-pill bg-meta-soft-gray px-3 py-1 text-xs font-medium text-meta-slate sm:inline">
-                {user.unidade.nome}
-              </span>
+              <p className="flex items-center gap-2 text-sm font-medium text-meta-charcoal">
+                <Building2 className="h-4 w-4 shrink-0 text-meta-slate" aria-hidden="true" />
+                <span className="truncate">{user.unidade.nome_qualificado || user.unidade.nome}</span>
+              </p>
             ) : (
-              <span className="hidden items-center gap-1 rounded-pill bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 sm:inline-flex">
-                <Sparkles className="h-3.5 w-3.5" />
+              <p className="flex items-center gap-2 text-sm font-medium text-amber-800">
+                <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
                 Sem unidade vinculada
-              </span>
+              </p>
             )}
+          </div>
 
-            <div className="flex items-center gap-3">
-              <Avatar className="h-9 w-9 shadow-lift ring-2 ring-white">
-                <AvatarFallback className="bg-primary text-xs font-medium text-primary-foreground">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden sm:block">
-                <p className="text-sm font-medium leading-tight text-meta-charcoal">{user.nome}</p>
-                <p className="text-xs tracking-tight text-meta-slate">{user.papel}</p>
-              </div>
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <div className="hidden min-w-0 text-right sm:block">
+              <p className="max-w-[14rem] truncate text-sm font-semibold leading-tight text-meta-charcoal">{user.nome}</p>
+              <p className="text-xs leading-tight text-meta-slate">{rotuloDoPapel(user.papel)}</p>
             </div>
-
-            <Button variant="ghost" size="icon" onClick={() => void logout()} title="Sair">
-              <LogOut className="h-4 w-4" />
-            </Button>
+            <Avatar className="h-9 w-9">
+              <AvatarFallback className="bg-accent text-xs font-semibold text-primary" aria-hidden="true">
+                {iniciais}
+              </AvatarFallback>
+            </Avatar>
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="flex h-11 w-11 items-center justify-center gap-2 rounded-lg text-sm font-medium text-meta-charcoal transition-colors hover:bg-meta-soft-gray sm:w-auto sm:px-3 md:h-10"
+              aria-label="Sair do sistema"
+            >
+              <LogOut className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Sair</span>
+            </button>
           </div>
         </header>
 
-        <main className="mx-auto max-w-[1440px] p-4 md:p-8">{children}</main>
+        <main id="conteudo" tabIndex={-1} className="page-content mx-auto w-full max-w-[1440px] px-4 py-5 outline-none sm:px-6 md:px-8 md:py-8">
+          {children}
+        </main>
       </div>
     </div>
   );
 }
 
-function Sidebar({
+function MenuFixo({
   pathname,
   homeHref,
-  role,
-  collapsed,
-  onToggle,
+  papel,
+  recolhido,
+  onAlternar,
   pendencias,
 }: {
   pathname: string;
   homeHref: string;
-  role: string;
-  collapsed: boolean;
-  onToggle: () => void;
+  papel: string;
+  recolhido: boolean;
+  onAlternar: () => void;
   pendencias: number;
 }) {
   return (
     <aside
       className={cn(
-        "hidden transition-[width] duration-300 md:fixed md:inset-y-0 md:z-30 md:flex md:flex-col",
-        collapsed ? "md:w-20" : "md:w-64",
+        "hidden border-r border-meta-divider bg-white transition-[width] duration-200 lg:fixed lg:inset-y-0 lg:z-40 lg:flex lg:flex-col",
+        recolhido ? "lg:w-[4.5rem]" : "lg:w-64",
       )}
     >
-      <div className="flex flex-grow flex-col overflow-y-auto border-r border-meta-divider bg-white pt-6">
-        <div className={cn("mb-8 flex items-center", collapsed ? "justify-center px-3" : "justify-between px-6")}>
-          <Brand href={homeHref} compact={collapsed} hideText={collapsed} />
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onToggle}
-            className={cn("h-9 w-9", collapsed && "absolute left-[62px] top-6 rounded-full border border-meta-divider bg-white shadow-lift")}
-            title={collapsed ? "Expandir menu" : "Minimizar menu"}
-            aria-label={collapsed ? "Expandir menu lateral" : "Minimizar menu lateral"}
-          >
-            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          </Button>
-        </div>
-        <Nav pathname={pathname} role={role} compact={collapsed} pendencias={pendencias} />
-        <Footer compact={collapsed} />
+      <div className={cn("flex h-14 shrink-0 items-center border-b border-meta-divider", recolhido ? "justify-center" : "px-5")}>
+        <Marca href={homeHref} compacta={recolhido} />
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-3 py-4">
+        <Navegacao pathname={pathname} papel={papel} compacta={recolhido} pendencias={pendencias} />
+      </div>
+
+      <div className="shrink-0 border-t border-meta-divider p-3">
+        <button
+          type="button"
+          onClick={onAlternar}
+          className={cn(
+            "flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-meta-slate transition-colors hover:bg-meta-soft-gray hover:text-meta-charcoal",
+            recolhido && "justify-center px-0",
+          )}
+          aria-label={recolhido ? "Expandir menu lateral" : "Recolher menu lateral"}
+          title={recolhido ? "Expandir menu" : "Recolher menu"}
+        >
+          {recolhido ? <PanelLeftOpen className="h-[18px] w-[18px]" aria-hidden="true" /> : <PanelLeftClose className="h-[18px] w-[18px]" aria-hidden="true" />}
+          {!recolhido && <span>Recolher menu</span>}
+        </button>
+        {!recolhido && <Rodape />}
       </div>
     </aside>
   );
 }
 
-function MobileSidebar({
+function Gaveta({
+  aberta,
+  onAbertaChange,
   pathname,
   homeHref,
-  role,
-  open,
-  onClose,
+  papel,
   pendencias,
 }: {
+  aberta: boolean;
+  onAbertaChange: (aberta: boolean) => void;
   pathname: string;
   homeHref: string;
-  role: string;
-  open: boolean;
-  onClose: () => void;
+  papel: string;
   pendencias: number;
 }) {
-  if (!open) return null;
-
+  // Radix cuida do foco, do Esc e do bloqueio da rolagem de trás: o menu é uma janela de verdade.
   return (
-    <div className="fixed inset-0 z-50 md:hidden">
-      <button className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} aria-label="Fechar menu" />
-      <aside className="relative flex h-full w-72 max-w-[84vw] flex-col overflow-y-auto border-r border-meta-divider bg-white pt-5 shadow-elevated">
-        <div className="mb-4 flex items-center justify-between px-5">
-          <Brand href={homeHref} compact />
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="h-5 w-5" />
-          </Button>
-        </div>
-        <div onClick={onClose}>
-          <Nav pathname={pathname} role={role} pendencias={pendencias} />
-        </div>
-        <Footer />
-      </aside>
-    </div>
+    <DialogPrimitive.Root open={aberta} onOpenChange={onAbertaChange}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-meta-charcoal/55 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 lg:hidden" />
+        <DialogPrimitive.Content
+          aria-describedby={undefined}
+          className="fixed inset-y-0 left-0 z-50 flex w-[19rem] max-w-[calc(100vw-3rem)] flex-col bg-white shadow-elevated focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left lg:hidden"
+        >
+          <DialogPrimitive.Title className="sr-only">Menu principal</DialogPrimitive.Title>
+          <div className="flex h-14 shrink-0 items-center justify-between border-b border-meta-divider pl-5 pr-2">
+            <Marca href={homeHref} onNavegar={() => onAbertaChange(false)} />
+            <DialogPrimitive.Close
+              className="flex h-11 w-11 items-center justify-center rounded-lg text-meta-slate transition-colors hover:bg-meta-soft-gray hover:text-meta-charcoal"
+              aria-label="Fechar menu"
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </DialogPrimitive.Close>
+          </div>
+          <div className="flex-1 overflow-y-auto px-3 py-4">
+            <Navegacao pathname={pathname} papel={papel} pendencias={pendencias} onNavegar={() => onAbertaChange(false)} />
+          </div>
+          <div className="shrink-0 border-t border-meta-divider p-4">
+            <Rodape />
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
 
-function Brand({ href, compact = false, hideText = false }: { href: string; compact?: boolean; hideText?: boolean }) {
+function Marca({ href, compacta = false, onNavegar }: { href: string; compacta?: boolean; onNavegar?: () => void }) {
   return (
-    <Link
-      className={cn("flex flex-shrink-0 items-center", !compact && "mb-8 px-6", compact && "mb-0 px-0")}
-      href={href}
-      title="SGCAS"
-    >
-      <div className={cn("flex h-10 w-10 items-center justify-center rounded-pill bg-primary", !hideText && "mr-3")}>
-        <Shield className="h-5 w-5 text-primary-foreground" />
-      </div>
-      <div className={cn(hideText && "sr-only")}>
-        <h1 className="text-base font-semibold tracking-tight text-meta-charcoal">SGCAS</h1>
-        <p className="text-xs text-meta-slate">Assistência Social</p>
-      </div>
+    <Link href={href} onClick={onNavegar} className="flex min-w-0 items-center gap-3 rounded-lg" title="SGCAS — início">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+        <Landmark className="h-[18px] w-[18px]" aria-hidden="true" />
+      </span>
+      <span className={cn("min-w-0", compacta && "sr-only")}>
+        <span className="block text-[15px] font-bold leading-tight tracking-tight text-meta-charcoal">SGCAS</span>
+        <span className="block truncate text-xs leading-tight text-meta-slate">Assistência Social</span>
+      </span>
     </Link>
   );
 }
 
-function Nav({
+function Navegacao({
   pathname,
-  role,
-  compact = false,
+  papel,
+  compacta = false,
   pendencias = 0,
+  onNavegar,
 }: {
   pathname: string;
-  role: string;
-  compact?: boolean;
+  papel: string;
+  compacta?: boolean;
   pendencias?: number;
+  onNavegar?: () => void;
 }) {
-  const visibleItems = navItems.filter((item) => !item.roles || item.roles.includes(role));
+  const visiveis = secoes
+    .map((secao) => ({ ...secao, itens: secao.itens.filter((item) => !item.roles || item.roles.includes(papel)) }))
+    .filter((secao) => secao.itens.length > 0);
 
   return (
-    <nav className={cn("flex-1 space-y-1", compact ? "px-3" : "px-3")}>
-      {visibleItems.map((item) => {
-        const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-        const selo = item.href === "/encaminhamentos" ? pendencias : 0;
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            title={selo ? `${item.label} — ${selo} pendente(s)` : item.label}
-            className={cn(
-              "relative flex items-center rounded-pill px-4 py-2.5 text-[15px] font-medium tracking-tight transition-all duration-200",
-              compact && "justify-center px-0",
-              isActive ? "bg-primary text-primary-foreground shadow-lift" : "text-meta-charcoal hover:bg-meta-soft-gray",
-            )}
-          >
-            <item.icon className={cn("h-[18px] w-[18px] flex-shrink-0", !compact && "mr-3", isActive ? "" : "text-meta-slate")} />
-            <span className={cn(compact && "sr-only")}>{item.label}</span>
-            {selo > 0 && (
-              <span
-                className={cn(
-                  "ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-semibold leading-5 text-white",
-                  compact && "absolute right-2 top-1 ml-0",
-                )}
-                aria-label={`${selo} pendente(s)`}
-              >
-                {selo > 99 ? "99+" : selo}
-              </span>
-            )}
-          </Link>
-        );
-      })}
+    <nav aria-label="Menu principal" className="space-y-5">
+      {visiveis.map((secao, indice) => (
+        <div key={secao.titulo ?? "inicio"}>
+          {secao.titulo &&
+            (compacta ? (
+              indice > 0 && <div className="mx-3 mb-2 border-t border-meta-divider" aria-hidden="true" />
+            ) : (
+              <p className="mb-1.5 px-3 text-xs font-semibold text-meta-slate">{secao.titulo}</p>
+            ))}
+          <ul className="space-y-0.5">
+            {secao.itens.map((item) => {
+              const ativo = estaAtivo(pathname, item.href);
+              const selo = item.href === "/encaminhamentos" ? pendencias : 0;
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    onClick={onNavegar}
+                    aria-current={ativo ? "page" : undefined}
+                    title={selo ? `${item.label} — ${selo} pendente(s)` : item.label}
+                    className={cn(
+                      "relative flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors lg:min-h-10",
+                      compacta && "justify-center px-0",
+                      ativo ? "bg-accent font-semibold text-primary" : "text-meta-charcoal hover:bg-meta-soft-gray",
+                    )}
+                  >
+                    {ativo && !compacta && <span className="absolute inset-y-2 left-0 w-1 rounded-r bg-primary" aria-hidden="true" />}
+                    <item.icon className={cn("h-[18px] w-[18px] shrink-0", ativo ? "text-primary" : "text-meta-slate")} aria-hidden="true" />
+                    <span className={cn("min-w-0 flex-1 truncate", compacta && "sr-only")}>{item.label}</span>
+                    {selo > 0 && (
+                      <span
+                        className={cn(
+                          "inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-semibold leading-5 text-white",
+                          compacta && "absolute right-1.5 top-1 min-w-4 px-1 text-[10px] leading-4",
+                        )}
+                        aria-label={`${selo} pendente(s)`}
+                      >
+                        {selo > 99 ? "99+" : selo}
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
     </nav>
   );
 }
 
-function Footer({ compact = false }: { compact?: boolean }) {
+function Rodape() {
   return (
-    <div className={cn("relative flex-shrink-0 border-t border-meta-divider", compact ? "p-3" : "p-6")}>
-      {compact ? (
-        <p className="text-center text-[10px] font-semibold tracking-tight text-meta-slate">v0.1</p>
-      ) : (
-        <>
-          <p className="text-center text-xs tracking-tight text-meta-slate">SGCAS v0.1.0</p>
-          <p className="mt-0.5 text-center text-[11px] tracking-tight text-meta-slate/70">Desenvolvido por SEDECTI</p>
-        </>
-      )}
-    </div>
+    <p className="mt-3 px-3 text-xs leading-5 text-meta-slate first:mt-0">
+      SGCAS v0.1.0
+      <br />
+      Desenvolvido por SEDECTI
+    </p>
   );
 }

@@ -5,7 +5,7 @@ import { BellRing, CheckCheck, Inbox, Send } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { DetalheDoEncaminhamento } from "@/components/encaminhamentos/detalhe";
 import { CabecalhoDoEncaminhamento } from "@/components/encaminhamentos/ficha";
-import { Badge, Button, Card, EmptyState, PageHeader, SecondaryButton, Select } from "@/components/ui";
+import { Aba, Abas, Badge, Button, Card, EmptyState, Field, PageHeader, SecondaryButton, Select } from "@/components/ui";
 import { api, mensagemDaApi } from "@/lib/api";
 import { avisarQueOsAvisosMudaram } from "@/lib/avisos";
 import { avisoPedeAtencao, formatarDataHora } from "@/lib/encaminhamentos";
@@ -85,35 +85,39 @@ export default function EncaminhamentosPage() {
         description="Quem chegou à sua unidade vindo de outra, o que aconteceu com quem a sua unidade encaminhou e os avisos entre as unidades."
       />
 
-      {erro && <div className="notice" role="alert">{erro}</div>}
+      {erro && <div className="notice mb-4" role="alert">{erro}</div>}
 
-      <div className="mb-5 flex flex-wrap items-center gap-2 rounded-card border border-meta-divider bg-white p-2 shadow-lift" role="tablist">
-        <AbaBotao ativa={aba === "recebidos"} onClick={() => setAba("recebidos")}>
-          <Inbox size={17} /> Recebidos
+      <Abas
+        rotulo="Caixas de encaminhamentos"
+        lateral={
+          aba !== "avisos" && (
+            <div className="pb-3 md:w-56">
+              <Field label="Mostrar">
+                <Select
+                  value={filtros[aba]}
+                  onChange={(event) => setFiltros((atual) => ({ ...atual, [aba]: event.target.value as Filtro }))}
+                >
+                  <option value="abertos">Em aberto</option>
+                  <option value="todos">Todos</option>
+                </Select>
+              </Field>
+            </div>
+          )
+        }
+      >
+        <Aba ativa={aba === "recebidos"} onClick={() => setAba("recebidos")}>
+          <Inbox size={16} aria-hidden="true" /> Recebidos
           <Badge tone={pendentes ? "warn" : "neutral"}>{pendentes ? `${pendentes} aguardando` : recebidos?.length ?? 0}</Badge>
-        </AbaBotao>
-        <AbaBotao ativa={aba === "enviados"} onClick={() => setAba("enviados")}>
-          <Send size={17} /> Enviados
+        </Aba>
+        <Aba ativa={aba === "enviados"} onClick={() => setAba("enviados")}>
+          <Send size={16} aria-hidden="true" /> Enviados
           <Badge tone="neutral">{enviados?.length ?? 0}</Badge>
-        </AbaBotao>
-        <AbaBotao ativa={aba === "avisos"} onClick={() => setAba("avisos")}>
-          <BellRing size={17} /> Avisos
+        </Aba>
+        <Aba ativa={aba === "avisos"} onClick={() => setAba("avisos")}>
+          <BellRing size={16} aria-hidden="true" /> Avisos
           <Badge tone={naoLidos ? "bad" : "neutral"}>{naoLidos ? `${naoLidos} novo(s)` : avisos?.length ?? 0}</Badge>
-        </AbaBotao>
-        {aba !== "avisos" && (
-          <label className="ml-auto flex items-center gap-2 text-sm text-meta-slate">
-            Mostrar
-            <Select
-              value={filtros[aba]}
-              onChange={(event) => setFiltros((atual) => ({ ...atual, [aba]: event.target.value as Filtro }))}
-              className="!h-9 !w-auto"
-            >
-              <option value="abertos">Em aberto</option>
-              <option value="todos">Todos</option>
-            </Select>
-          </label>
-        )}
-      </div>
+        </Aba>
+      </Abas>
 
       {aba === "recebidos" && (
         <ListaDeEncaminhamentos
@@ -145,23 +149,6 @@ export default function EncaminhamentosPage() {
   );
 }
 
-function AbaBotao({ ativa, onClick, children }: { ativa: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={ativa}
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center gap-2 rounded-pill px-4 py-2 text-sm font-semibold transition-colors",
-        ativa ? "bg-primary text-primary-foreground shadow-lift" : "text-meta-charcoal hover:bg-meta-soft-gray",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
 function ListaDeEncaminhamentos({
   itens,
   vazio,
@@ -175,12 +162,12 @@ function ListaDeEncaminhamentos({
   if (itens.length === 0) return <EmptyState title={vazio.titulo} text={vazio.texto} />;
 
   return (
-    <div className="grid gap-3 lg:grid-cols-2">
+    <div className="grid gap-4 lg:grid-cols-2">
       {itens.map((item) => (
         <Card key={item.id}>
-          <div className="mb-3 flex items-start justify-between gap-3">
-            <strong className="text-base text-meta-charcoal">{item.cidadao_nome}</strong>
-            <SecondaryButton type="button" className="h-9 shrink-0 px-3 text-xs" onClick={() => onAbrir(item.id)}>
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+            <strong className="min-w-0 text-base text-meta-charcoal">{item.cidadao_nome}</strong>
+            <SecondaryButton type="button" size="sm" className="shrink-0" onClick={() => onAbrir(item.id)}>
               Abrir ficha
             </SecondaryButton>
           </div>
@@ -207,7 +194,7 @@ function ListaDeAvisos({
 }) {
   if (avisos === null) return <p className="text-sm text-meta-slate">Carregando...</p>;
   if (avisos.length === 0) {
-    return <EmptyState title="Nenhum aviso" text="Os avisos entre as unidades — encaminhamentos, chegadas e repetições de auxílio — aparecem aqui." />;
+    return <EmptyState title="Nenhum aviso" text="Os avisos entre as unidades (encaminhamentos, chegadas e repetições de auxílio) aparecem aqui." />;
   }
   const naoLidos = avisos.filter((a) => !a.lido).length;
 
@@ -215,8 +202,8 @@ function ListaDeAvisos({
     <div className="grid gap-3">
       {naoLidos > 0 && (
         <div className="flex justify-end">
-          <SecondaryButton type="button" className="h-9 px-3 text-xs" onClick={onTodosLidos}>
-            <CheckCheck size={15} /> Marcar todos como lidos
+          <SecondaryButton type="button" size="sm" onClick={onTodosLidos}>
+            <CheckCheck size={15} aria-hidden="true" /> Marcar todos como lidos
           </SecondaryButton>
         </div>
       )}
@@ -224,8 +211,8 @@ function ListaDeAvisos({
         <article
           key={aviso.id}
           className={cn(
-            "flex flex-col gap-3 rounded-card border p-4 sm:flex-row sm:items-center sm:justify-between",
-            aviso.lido ? "border-meta-divider bg-white" : "border-primary/30 bg-primary/5",
+            "flex flex-col gap-3 rounded-card border bg-white p-4 sm:flex-row sm:items-center sm:justify-between",
+            aviso.lido ? "border-meta-divider" : "border-l-4 border-meta-divider border-l-primary",
           )}
         >
           <div className="min-w-0">
@@ -235,14 +222,14 @@ function ListaDeAvisos({
             </div>
             <p className={cn("text-sm leading-6", aviso.lido ? "text-meta-slate" : "font-medium text-meta-charcoal")}>{aviso.mensagem}</p>
           </div>
-          <div className="flex shrink-0 gap-2">
+          <div className="flex shrink-0 flex-wrap gap-2">
             {aviso.encaminhamento && (
-              <SecondaryButton type="button" className="h-9 px-3 text-xs" onClick={() => onAbrir(aviso.encaminhamento as string)}>
+              <SecondaryButton type="button" size="sm" onClick={() => onAbrir(aviso.encaminhamento as string)}>
                 Ver encaminhamento
               </SecondaryButton>
             )}
             {!aviso.lido && (
-              <Button type="button" className="h-9 px-3 text-xs" onClick={() => onLido(aviso)}>Marcar como lido</Button>
+              <Button type="button" size="sm" onClick={() => onLido(aviso)}>Marcar como lido</Button>
             )}
           </div>
         </article>

@@ -1,9 +1,10 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Clock3, ShieldCheck, UserCog, UsersRound } from "lucide-react";
+import { CheckCircle2, Clock3, ShieldAlert, UserCog, UsersRound } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, Select } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, SectionHeading, Select, Stat } from "@/components/ui";
+import { formatarDataCurta } from "@/lib/datas";
 import { api } from "@/lib/api";
 import type { Operador, Papel, Unidade } from "@/types/sgcas";
 
@@ -113,46 +114,38 @@ export default function AdminPage() {
         description="Aprove solicitações, defina perfil, vincule unidade e acompanhe operadores cadastrados."
       />
 
-      {mensagem && <div className="notice">{mensagem}</div>}
-      <div style={{ height: 16 }} />
+      {mensagem && <div className="notice mb-4" role="status">{mensagem}</div>}
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <ResumoCard title="Solicitações" value={resumo.pendentes} text="Aguardando aprovação" icon={Clock3} tone="warn" />
-        <ResumoCard title="Operadores ativos" value={resumo.ativos} text="Com acesso liberado" icon={UsersRound} tone="good" />
-        <ResumoCard title="Sem unidade" value={resumo.semUnidade} text="Precisam de lotação" icon={ShieldCheck} tone="bad" />
+      <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
+        <Stat label="Solicitações" value={resumo.pendentes.toLocaleString("pt-BR")} hint="Aguardando aprovação" icon={Clock3} highlight={resumo.pendentes > 0} />
+        <Stat label="Operadores ativos" value={resumo.ativos.toLocaleString("pt-BR")} hint="Com acesso liberado" icon={UsersRound} />
+        <Stat label="Sem unidade" value={resumo.semUnidade.toLocaleString("pt-BR")} hint="Precisam de lotação" icon={ShieldAlert} highlight={resumo.semUnidade > 0} />
       </div>
 
-      <div style={{ height: 16 }} />
-
-      <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+      <div className="mt-4 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
         <Card>
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <h2 className="!mb-1">Solicitações de acesso</h2>
-              <p className="text-sm leading-6 text-meta-slate">Escolha a role e a unidade antes de aprovar.</p>
-            </div>
-            <Badge tone={pedidos.length ? "warn" : "good"}>{pedidos.length}</Badge>
-          </div>
+          <SectionHeading title="Solicitações de acesso" count={pedidos.length} />
+          <p className="-mt-1 mb-4 text-sm leading-6 text-meta-slate">Escolha o perfil e a unidade antes de aprovar.</p>
 
           {pedidos.length === 0 ? (
-            <EmptyState title="Sem solicitações" text="Quando alguém entrar sem role do SGCAS, aparece aqui." />
+            <EmptyState title="Sem solicitações" text="Quando alguém entrar sem perfil no SGCAS, o pedido aparece aqui." />
           ) : (
             <div className="space-y-3">
               {pedidos.map((pedido) => (
                 <form
-                  className="rounded-card border border-meta-divider bg-meta-warm-gray p-4"
+                  className="rounded-lg border border-meta-divider bg-meta-warm-gray p-3 sm:p-4"
                   key={pedido.id}
                   onSubmit={(event) => void aprovar(event, pedido)}
                 >
                   <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <strong className="block truncate text-sm text-meta-charcoal">{pedido.nome}</strong>
-                      <small className="block truncate text-xs text-meta-slate">{pedido.email}</small>
+                      <strong className="block text-sm text-meta-charcoal">{pedido.nome}</strong>
+                      <small className="block text-xs text-meta-slate">{pedido.email}</small>
                     </div>
                     <Badge tone="warn">{formatarDataCurta(pedido.pedido_em)}</Badge>
                   </div>
 
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <Field label="Perfil">
                       <Select name="papel" defaultValue="RECEPCIONISTA">
                         {papeis.map((papel) => (
@@ -176,8 +169,8 @@ export default function AdminPage() {
                     Dica: recepcionista e técnico normalmente precisam estar vinculados a uma unidade.
                   </p>
 
-                  <Button className="mt-3 h-9 px-4 text-xs">
-                    <CheckCircle2 size={15} />
+                  <Button className="mt-3" size="sm">
+                    <CheckCircle2 size={15} aria-hidden="true" />
                     Aprovar acesso
                   </Button>
                 </form>
@@ -187,13 +180,8 @@ export default function AdminPage() {
         </Card>
 
         <Card>
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <h2 className="!mb-1">Operadores cadastrados</h2>
-              <p className="text-sm leading-6 text-meta-slate">Ajuste perfil, lotação e status. O perfil é atualizado no Keycloak.</p>
-            </div>
-            <Badge tone="neutral">{operadores.length}</Badge>
-          </div>
+          <SectionHeading title="Operadores cadastrados" count={operadores.length} />
+          <p className="-mt-1 mb-4 text-sm leading-6 text-meta-slate">Ajuste perfil, lotação e status. O perfil é atualizado no Keycloak.</p>
 
           {operadores.length === 0 ? (
             <EmptyState title="Nenhum operador" text="Os usuários aprovados aparecem aqui." />
@@ -201,14 +189,14 @@ export default function AdminPage() {
             <div className="space-y-3">
               {operadores.map((operador) => (
                 <form
-                  className="rounded-card border border-meta-divider bg-white p-4 shadow-lift"
+                  className="rounded-lg border border-meta-divider bg-white p-3 sm:p-4"
                   key={operador.id}
                   onSubmit={(event) => void atualizarOperador(event, operador)}
                 >
                   <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <strong className="block truncate text-sm text-meta-charcoal">{operador.nome || operador.email}</strong>
-                      <small className="block truncate text-xs text-meta-slate">{operador.email}</small>
+                      <strong className="block text-sm text-meta-charcoal">{operador.nome || operador.email}</strong>
+                      <small className="block text-xs text-meta-slate">{operador.email}</small>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Badge tone={operador.ativo ? "good" : "bad"}>{operador.ativo ? "Ativo" : "Inativo"}</Badge>
@@ -216,7 +204,7 @@ export default function AdminPage() {
                     </div>
                   </div>
 
-                  <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <Field label="Nome">
                       <Input name="nome" defaultValue={operador.nome} />
                     </Field>
@@ -237,16 +225,16 @@ export default function AdminPage() {
                         ))}
                       </Select>
                     </Field>
-                    <label className="inline-flex h-11 items-center gap-2 rounded-lg border border-meta-divider bg-meta-soft-gray px-3 text-xs font-semibold text-meta-charcoal">
-                      <input name="ativo" type="checkbox" defaultChecked={operador.ativo} />
-                      Ativo
+                    <label className="flex min-h-11 items-center gap-2.5 self-end rounded-lg border border-input bg-white px-3 text-sm font-medium text-meta-charcoal md:min-h-10">
+                      <input name="ativo" type="checkbox" className="h-4 w-4 accent-primary" defaultChecked={operador.ativo} />
+                      Operador ativo
                     </label>
                   </div>
 
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                     <p className="text-xs leading-5 text-meta-slate">{descricaoPapel(operador.papel)}</p>
-                    <Button className="h-9 px-4 text-xs" type="submit">
-                      <UserCog size={15} />
+                    <Button size="sm" type="submit">
+                      <UserCog size={15} aria-hidden="true" />
                       Salvar
                     </Button>
                   </div>
@@ -260,54 +248,10 @@ export default function AdminPage() {
   );
 }
 
-function ResumoCard({
-  title,
-  value,
-  text,
-  icon: Icon,
-  tone,
-}: {
-  title: string;
-  value: number;
-  text: string;
-  icon: React.ElementType;
-  tone: "good" | "warn" | "bad";
-}) {
-  const toneClass = {
-    good: "bg-success/10 text-success",
-    warn: "bg-warning/20 text-[#8a5a00]",
-    bad: "bg-destructive/10 text-destructive",
-  }[tone];
-
-  return (
-    <Card className="!p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-meta-slate">{title}</p>
-          <strong className="mt-1.5 block text-2xl text-meta-charcoal">{value.toLocaleString("pt-BR")}</strong>
-          <small className="mt-0.5 block text-xs text-meta-slate">{text}</small>
-        </div>
-        <span className={`flex h-9 w-9 items-center justify-center rounded-pill ${toneClass}`}>
-          <Icon size={16} />
-        </span>
-      </div>
-    </Card>
-  );
-}
-
 function rotuloPapel(papel: Papel) {
   return papeis.find((item) => item.value === papel)?.label ?? papel;
 }
 
 function descricaoPapel(papel: Papel) {
   return papeis.find((item) => item.value === papel)?.hint ?? "Perfil do operador.";
-}
-
-function formatarDataCurta(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
 }

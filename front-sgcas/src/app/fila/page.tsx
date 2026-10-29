@@ -8,6 +8,7 @@ import {
   ClipboardEdit,
   FolderOpen,
   ListChecks,
+  RefreshCw,
   Send,
   Stethoscope,
   UserX,
@@ -21,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, SecondaryButton, Select } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, SecondaryButton, SectionHeading, Select, Stat } from "@/components/ui";
 import { DetalheDoEncaminhamento } from "@/components/encaminhamentos/detalhe";
 import { CabecalhoDoEncaminhamento, FichaCompleta } from "@/components/encaminhamentos/ficha";
 import {
@@ -30,6 +31,8 @@ import {
 } from "@/components/encaminhamentos/formulario";
 import { ApiError, api, mensagemDaApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { rotuloPrioridade, rotuloSituacao, tomDaPrioridade, tomDoCaso } from "@/lib/casos";
+import { formatarDataCurta } from "@/lib/datas";
 import type { Cidadao, EncaminhamentoDetalhe, EntradaHistorico, Caso, PainelAtendente, Senha, Unidade } from "@/types/sgcas";
 
 const indicadores = {
@@ -39,6 +42,9 @@ const indicadores = {
   casos_em_acompanhamento: { titulo: "Acompanhamento", descricao: "Casos da unidade que não estão concluídos nem cancelados." },
 };
 type Indicador = keyof typeof indicadores;
+
+// Ação que descarta algo (marcar não comparecimento): vermelho discreto, sem preencher o botão.
+const PERIGO = "!border-red-200 !text-red-700 hover:!bg-red-50";
 type DetalhesIndicador = { tipo: "senhas"; registros: Senha[] } | { tipo: "casos"; registros: Caso[] };
 
 type SenhaAberta = Senha & { operador_nome: string | null; pode_retomar: boolean };
@@ -376,51 +382,54 @@ export default function FilaPage() {
         action={<Button onClick={chamar} disabled={recuperando || chamando || Boolean(atendimento) || !unidadeId || !podeChamar}>{chamando ? "Chamando..." : "Chamar próximo"}</Button>}
       />
 
-      {!unidadeId && <div className="notice">Seu usuário não tem unidade de lotação definida. Solicite o vínculo a um administrador para chamar senhas.</div>}
-      {user && !podeChamar && <div className="notice">Seu perfil não tem permissão para chamar senhas.</div>}
-      {erroCarga && <div className="notice" role="alert">{erroCarga}</div>}
-      {mensagem && <div className="notice" role="status">{mensagem}</div>}
-      <div style={{ height: 16 }} />
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <MiniStat onClick={() => void abrirIndicador("atendidos_hoje")} title="Atendidos hoje" value={painel?.atendidos_hoje ?? 0} detail="Finalizados pelo atendente" icon={CheckCircle2} tone="good" />
-        <MiniStat onClick={() => void abrirIndicador("aguardando_na_fila")} title="Aguardando na fila" value={painel?.aguardando_na_fila ?? fila.length} detail="Próximas chamadas" icon={ListChecks} tone="warn" />
-        <MiniStat onClick={() => void listarAbertos()} title="Em atendimento" value={painel?.em_atendimento ?? 0} detail="Senhas já chamadas" icon={Stethoscope} tone="primary" />
-        <MiniStat onClick={() => void abrirIndicador("finalizados_hoje")} title="Finalizados" value={painel?.finalizados_hoje ?? 0} detail="Casos fechados hoje" icon={Clock3} tone="neutral" />
-        <MiniStat onClick={() => void abrirIndicador("casos_em_acompanhamento")} title="Acompanhamento" value={painel?.casos_em_acompanhamento ?? 0} detail="Casos ativos na unidade" icon={FolderOpen} tone="bad" />
+      <div className="grid gap-3 empty:hidden">
+        {!unidadeId && <div className="notice">Seu usuário não tem unidade de lotação definida. Solicite o vínculo a um administrador para chamar senhas.</div>}
+        {user && !podeChamar && <div className="notice">Seu perfil não tem permissão para chamar senhas.</div>}
+        {erroCarga && <div className="notice" role="alert">{erroCarga}</div>}
+        {mensagem && <div className="notice" role="status">{mensagem}</div>}
       </div>
 
-      <div style={{ height: 16 }} />
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+        <Stat onClick={() => void abrirIndicador("atendidos_hoje")} label="Atendidos hoje" value={(painel?.atendidos_hoje ?? 0).toLocaleString("pt-BR")} hint="Finalizados pelo atendente" icon={CheckCircle2} />
+        <Stat onClick={() => void abrirIndicador("aguardando_na_fila")} label="Aguardando na fila" value={(painel?.aguardando_na_fila ?? fila.length).toLocaleString("pt-BR")} hint="Próximas chamadas" icon={ListChecks} highlight />
+        <Stat onClick={() => void listarAbertos()} label="Em atendimento" value={(painel?.em_atendimento ?? 0).toLocaleString("pt-BR")} hint="Senhas já chamadas" icon={Stethoscope} />
+        <Stat onClick={() => void abrirIndicador("finalizados_hoje")} label="Finalizados" value={(painel?.finalizados_hoje ?? 0).toLocaleString("pt-BR")} hint="Casos fechados hoje" icon={Clock3} />
+        <Stat onClick={() => void abrirIndicador("casos_em_acompanhamento")} label="Acompanhamento" value={(painel?.casos_em_acompanhamento ?? 0).toLocaleString("pt-BR")} hint="Casos ativos na unidade" icon={FolderOpen} />
+      </div>
 
-      <div className="grid two">
+      <div className="grid two mt-4 items-start">
         <Card>
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div><h2 className="!mb-0">Fila</h2><small>{user?.unidade?.nome}</small></div>
-            <SecondaryButton onClick={() => void carregar()} disabled={!unidadeId}>Atualizar fila</SecondaryButton>
-            <Badge tone={fila.length ? "warn" : "good"}>{fila.length}</Badge>
-          </div>
+          <SectionHeading
+            title="Fila"
+            count={fila.length}
+            action={
+              <SecondaryButton size="sm" onClick={() => void carregar()} disabled={!unidadeId}>
+                <RefreshCw size={14} aria-hidden="true" />
+                Atualizar fila
+              </SecondaryButton>
+            }
+          />
+          {user?.unidade?.nome && <p className="-mt-1 mb-3 text-sm text-meta-slate">{user.unidade.nome}</p>}
           {fila.length === 0 ? (
-            <EmptyState title="Fila vazia" text="A recepcao ainda nao encaminhou atendimentos." />
+            <EmptyState title="Fila vazia" text="A recepção ainda não encaminhou atendimentos." />
           ) : (
-            fila.map((senha) => (
-              <div className="rounded-feature border border-meta-divider bg-meta-warm-gray p-4 transition-all hover:bg-white hover:shadow-lift" key={senha.id}>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-3">
-                    <strong className="flex h-11 min-w-14 items-center justify-center rounded-feature bg-primary px-3 text-lg text-primary-foreground">
-                      {senha.senha}
-                    </strong>
-                    <div>
-                      <span className="font-semibold text-meta-charcoal">{senha.cidadao_nome}</span>
-                      <small className="block text-meta-slate">{senha.servico}</small>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
+            <ul>
+              {fila.map((senha) => (
+                <li className="line-row flex flex-wrap items-center gap-x-3 gap-y-2" key={senha.id}>
+                  <span className="flex h-10 min-w-14 shrink-0 items-center justify-center rounded-lg bg-primary px-2.5 text-[15px] font-bold tabular-nums text-primary-foreground">
+                    {senha.senha}
+                  </span>
+                  <span className="min-w-0 flex-1 basis-40">
+                    <span className="block text-sm font-semibold text-meta-charcoal">{senha.cidadao_nome}</span>
+                    <small className="block">{senha.servico}</small>
+                  </span>
+                  <span className="flex flex-wrap items-center gap-2">
                     <Badge tone={tomDaPrioridade(senha.prioridade)}>{rotuloPrioridade(senha.prioridade)}</Badge>
-                    <Badge tone="neutral">{formatarDataHora(senha.criado_em)}</Badge>
-                  </div>
-                </div>
-              </div>
-            ))
+                    <small className="tabular-nums">{formatarDataCurta(senha.criado_em)}</small>
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
         </Card>
 
@@ -429,11 +438,11 @@ export default function FilaPage() {
           {!atendimento ? (
             <EmptyState title={recuperando && podeChamar && unidadeId ? "Recuperando atendimento..." : "Nenhum atendimento iniciado"} text="Use o botão chamar próximo para conferir a senha antes de iniciar." />
           ) : (
-            <div className="grid">
-              <div className="rounded-feature border border-meta-divider bg-meta-warm-gray p-5">
+            <div className="grid gap-4">
+              <div className="rounded-lg border border-meta-divider bg-meta-warm-gray p-4">
                 <div className="row">
-                  <Badge tone="good">{atendimento.senha.senha}</Badge>
-                  <Badge tone="warn">{atendimento.senha.prioridade}</Badge>
+                  <Badge tone="info">Senha {atendimento.senha.senha}</Badge>
+                  <Badge tone={tomDaPrioridade(atendimento.senha.prioridade)}>{rotuloPrioridade(atendimento.senha.prioridade)}</Badge>
                   <Badge tone={atendimentoIniciado ? "good" : "warn"}>
                     {atendimentoIniciado ? "Atendimento iniciado" : "Aguardando confirmação"}
                   </Badge>
@@ -441,21 +450,21 @@ export default function FilaPage() {
                 <h3 className="mt-3">{atendimento.cidadao.nome}</h3>
                 <p className="text-sm text-meta-slate">{atendimento.senha.servico}</p>
                 {atendimento.caso && (
-                  <div className="mt-4 rounded-lg bg-white p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-meta-slate">Caso em atendimento</p>
-                    <strong>{atendimento.caso.protocolo}</strong>
-                    <p className="text-sm text-meta-slate">{atendimento.caso.descricao || atendimento.caso.situacao}</p>
+                  <div className="mt-3 rounded-lg border border-meta-divider bg-white p-3">
+                    <p className="text-[13px] font-semibold text-meta-slate">Caso em atendimento</p>
+                    <strong className="text-sm">{atendimento.caso.protocolo}</strong>
+                    <p className="text-sm text-meta-slate">{atendimento.caso.descricao || rotuloSituacao(atendimento.caso.situacao)}</p>
                   </div>
                 )}
                 {atendimento.encaminhamento_recebido && (
-                  <div className="mt-4 flex flex-col gap-3 rounded-lg border border-primary/25 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="mt-3 flex flex-col gap-3 rounded-lg border border-primary/30 bg-accent p-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="text-sm">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-meta-slate">Encaminhamento recebido</p>
+                      <p className="text-[13px] font-semibold text-meta-slate">Encaminhamento recebido</p>
                       <strong>
                         De {atendimento.encaminhamento_recebido.unidade_origem_nome || "outra unidade"} · {atendimento.encaminhamento_recebido.categoria_rotulo}
                       </strong>
                     </div>
-                    <SecondaryButton type="button" className="h-9 shrink-0 px-3 text-xs" onClick={() => setFichaAberta(atendimento.encaminhamento_recebido?.id ?? null)}>
+                    <SecondaryButton type="button" size="sm" className="shrink-0" onClick={() => setFichaAberta(atendimento.encaminhamento_recebido?.id ?? null)}>
                       Ver ficha completa
                     </SecondaryButton>
                   </div>
@@ -468,42 +477,34 @@ export default function FilaPage() {
                     setModalOpen(true);
                   }}>
                     Abrir conferência
-                    <ArrowRight size={16} />
+                    <ArrowRight size={16} aria-hidden="true" />
                   </Button>
-                  <button
-                    type="button"
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-pill border border-red-200 bg-red-50 px-4 text-sm font-semibold text-red-700 transition-all hover:bg-red-100"
-                    onClick={() => abrirModo("naoCompareceu")}
-                  >
-                    <UserX size={16} />
+                  <SecondaryButton type="button" className={PERIGO} onClick={() => abrirModo("naoCompareceu")}>
+                    <UserX size={16} aria-hidden="true" />
                     Não compareceu
-                  </button>
+                  </SecondaryButton>
                 </div>
               ) : (
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                  <SecondaryButton type="button" className="h-10 px-3 text-xs" onClick={() => abrirModo("observacao")}>
-                    <ClipboardEdit size={15} />
+                  <SecondaryButton type="button" onClick={() => abrirModo("observacao")}>
+                    <ClipboardEdit size={15} aria-hidden="true" />
                     Observação
                   </SecondaryButton>
-                  <SecondaryButton type="button" className="h-10 px-3 text-xs" onClick={() => abrirModo("encaminhar")}>
-                    <Send size={15} />
+                  <SecondaryButton type="button" onClick={() => abrirModo("encaminhar")}>
+                    <Send size={15} aria-hidden="true" />
                     Encaminhar
                   </SecondaryButton>
-                  <Button type="button" className="h-10 px-3 text-xs" onClick={() => abrirModo("concluir")}>
-                    <CheckCircle2 size={15} />
+                  <Button type="button" onClick={() => abrirModo("concluir")}>
+                    <CheckCircle2 size={15} aria-hidden="true" />
                     Concluir
                   </Button>
-                  <button
-                    type="button"
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-pill border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-700 transition-all hover:bg-red-100"
-                    onClick={() => abrirModo("naoCompareceu")}
-                  >
-                    <UserX size={15} />
+                  <SecondaryButton type="button" className={PERIGO} onClick={() => abrirModo("naoCompareceu")}>
+                    <UserX size={15} aria-hidden="true" />
                     Não veio
-                  </button>
+                  </SecondaryButton>
                 </div>
               )}
-              <h3>Histórico do cidadão</h3>
+              <h3 className="!text-base">Histórico do cidadão</h3>
               {atendimento.historico.length === 0 ? (
                 <EmptyState title="Sem histórico recente" text="Não há registros recentes para este cidadão." />
               ) : (
@@ -519,32 +520,25 @@ export default function FilaPage() {
         </Card>
       </div>
 
-      <div style={{ height: 16 }} />
-
-      <Card>
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <h2 className="!mb-1">Últimos atendimentos</h2>
-            <p className="text-sm leading-6 text-meta-slate">Casos mais recentes assumidos por você.</p>
-          </div>
-          <Badge tone="neutral">{painel?.ultimos_atendimentos?.length ?? 0}</Badge>
-        </div>
+      <Card className="mt-4">
+        <SectionHeading title="Últimos atendimentos" count={painel?.ultimos_atendimentos?.length ?? 0} />
+        <p className="-mt-1 mb-3 text-sm text-meta-slate">Casos mais recentes assumidos por você.</p>
 
         {!painel?.ultimos_atendimentos?.length ? (
-          <EmptyState title="Sem atendimentos recentes" text="Quando você iniciar/concluir casos, eles aparecem aqui." />
+          <EmptyState title="Sem atendimentos recentes" text="Quando você iniciar ou concluir casos, eles aparecem aqui." />
         ) : (
           <div className="grid gap-3 md:grid-cols-2">
             {painel.ultimos_atendimentos.map((caso) => (
-              <article className="rounded-feature border border-meta-divider bg-white p-4 shadow-lift" key={caso.id}>
+              <article className="rounded-lg border border-meta-divider bg-white p-4" key={caso.id}>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <strong className="text-meta-charcoal">{caso.cidadao_nome}</strong>
                   <Badge tone={tomDoCaso(caso.situacao)}>{rotuloSituacao(caso.situacao)}</Badge>
                 </div>
                 <p className="text-sm font-medium text-meta-charcoal">{caso.servico_nome || caso.protocolo}</p>
-                <p className="mt-1 text-sm leading-6 text-meta-slate">{caso.descricao || "Sem relato registrado."}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <p className="mt-1 line-clamp-3 text-sm leading-6 text-meta-slate">{caso.descricao || "Sem relato registrado."}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                   <Badge tone={tomDaPrioridade(caso.prioridade)}>{rotuloPrioridade(caso.prioridade)}</Badge>
-                  <Badge tone="neutral">{formatarDataHora(caso.aberto_em)}</Badge>
+                  <small className="tabular-nums">{formatarDataCurta(caso.aberto_em)}</small>
                 </div>
               </article>
             ))}
@@ -558,25 +552,27 @@ export default function FilaPage() {
             <DialogTitle>{indicador ? indicadores[indicador].titulo : "Registros"}</DialogTitle>
             <DialogDescription>{indicador ? indicadores[indicador].descricao : ""}</DialogDescription>
           </DialogHeader>
-          {erroDetalhes ? <div role="alert"><p>{erroDetalhes}</p><SecondaryButton onClick={() => indicador && void abrirIndicador(indicador)}>Tentar novamente</SecondaryButton></div>
-            : !detalhes ? <p>Carregando registros...</p>
-            : detalhes.registros.length === 0 ? <p>Nenhum registro neste indicador.</p>
-            : <div className="grid gap-3 max-h-[60vh] overflow-y-auto">
-              <p className="text-sm text-meta-slate">{detalhes.registros.length} registro(s)</p>
-              {detalhes.tipo === "senhas" ? detalhes.registros.map((senha) => (
-                <article key={senha.id} className="rounded-card border p-4">
-                  <strong>{senha.senha} · {senha.cidadao_nome}</strong>
-                  <p>{senha.servico || "Serviço não informado"}</p>
-                  <small>{rotuloPrioridade(senha.prioridade)} · {formatarDataHora(senha.criado_em)}</small>
-                </article>
-              )) : detalhes.registros.map((caso) => (
-                <article key={caso.id} className="rounded-card border p-4">
-                  <strong>{caso.protocolo} · {caso.cidadao_nome}</strong>
-                  <p>{caso.servico_nome || caso.descricao || "Serviço não informado"}</p>
-                  <p>{rotuloSituacao(caso.situacao)}</p>
-                  <small>{caso.tecnico_nome || "Sem técnico responsável"} · {caso.unidade_nome}</small>
-                </article>
-              ))}
+          {erroDetalhes ? <div role="alert" className="grid gap-3"><p className="text-sm">{erroDetalhes}</p><SecondaryButton className="w-fit" onClick={() => indicador && void abrirIndicador(indicador)}>Tentar novamente</SecondaryButton></div>
+            : !detalhes ? <p className="text-sm text-meta-slate" role="status">Carregando registros...</p>
+            : detalhes.registros.length === 0 ? <p className="text-sm text-meta-slate">Nenhum registro neste indicador.</p>
+            : <div>
+              <p className="mb-1 text-sm text-meta-slate">{detalhes.registros.length} registro(s)</p>
+              <ul>
+                {detalhes.tipo === "senhas" ? detalhes.registros.map((senha) => (
+                  <li key={senha.id} className="line-row">
+                    <strong className="block">{senha.senha} · {senha.cidadao_nome}</strong>
+                    <span className="block">{senha.servico || "Serviço não informado"}</span>
+                    <small>{rotuloPrioridade(senha.prioridade)} · {formatarDataCurta(senha.criado_em)}</small>
+                  </li>
+                )) : detalhes.registros.map((caso) => (
+                  <li key={caso.id} className="line-row">
+                    <strong className="block">{caso.protocolo} · {caso.cidadao_nome}</strong>
+                    <span className="block">{caso.servico_nome || caso.descricao || "Serviço não informado"}</span>
+                    <span className="block">{rotuloSituacao(caso.situacao)}</span>
+                    <small>{caso.tecnico_nome || "Sem técnico responsável"} · {caso.unidade_nome}</small>
+                  </li>
+                ))}
+              </ul>
             </div>}
         </DialogContent>
       </Dialog>
@@ -587,15 +583,15 @@ export default function FilaPage() {
             <DialogTitle>Senhas em atendimento</DialogTitle>
             <DialogDescription>Selecione uma senha sua para reabrir em Atendimento atual. As demais mostram quem está atendendo.</DialogDescription>
           </DialogHeader>
-          {carregandoAbertos ? <p>Carregando atendimentos...</p> : erroAbertos ? (
-            <div role="alert"><p>{erroAbertos}</p><SecondaryButton onClick={() => void listarAbertos()}>Tentar novamente</SecondaryButton></div>
-          ) : abertos.length === 0 ? <p>Nenhuma senha em atendimento nesta unidade.</p> : (
-            <div className="grid gap-3 max-h-[60vh] overflow-y-auto">
+          {carregandoAbertos ? <p className="text-sm text-meta-slate" role="status">Carregando atendimentos...</p> : erroAbertos ? (
+            <div role="alert" className="grid gap-3"><p className="text-sm">{erroAbertos}</p><SecondaryButton className="w-fit" onClick={() => void listarAbertos()}>Tentar novamente</SecondaryButton></div>
+          ) : abertos.length === 0 ? <p className="text-sm text-meta-slate">Nenhuma senha em atendimento nesta unidade.</p> : (
+            <div className="grid gap-2.5">
               {abertos.map((senha) => (
-                <button key={senha.id} type="button" className="rounded-card border p-4 text-left disabled:opacity-60 hover:bg-meta-soft-gray" disabled={!senha.pode_retomar || retomando !== null} onClick={() => void retomar(senha.id)}>
-                  <strong>{senha.senha} · {senha.cidadao_nome}</strong>
-                  <p>{senha.servico}</p>
-                  <small>{senha.operador_nome ?? "Sem atendente"} · {retomando === senha.id ? "Abrindo..." : senha.pode_retomar ? "Retomar atendimento" : "Com outro atendente"}</small>
+                <button key={senha.id} type="button" className="rounded-lg border border-meta-divider bg-white p-3.5 text-left transition-colors hover:border-primary/40 hover:bg-meta-warm-gray disabled:opacity-60 disabled:hover:border-meta-divider disabled:hover:bg-white" disabled={!senha.pode_retomar || retomando !== null} onClick={() => void retomar(senha.id)}>
+                  <strong className="block text-sm">{senha.senha} · {senha.cidadao_nome}</strong>
+                  <span className="block text-sm">{senha.servico}</span>
+                  <small className="block text-meta-slate">{senha.operador_nome ?? "Sem atendente"} · {retomando === senha.id ? "Abrindo..." : senha.pode_retomar ? "Retomar atendimento" : "Com outro atendente"}</small>
                 </button>
               ))}
             </div>
@@ -606,7 +602,7 @@ export default function FilaPage() {
       <DetalheDoEncaminhamento id={fichaAberta} onClose={() => setFichaAberta(null)} onMudou={() => void carregar()} />
 
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+        <DialogContent className="max-w-3xl">
           {atendimento && (
             <>
               <DialogHeader>
@@ -615,19 +611,19 @@ export default function FilaPage() {
               </DialogHeader>
 
               <div className="grid gap-4">
-                <div className="rounded-feature border border-meta-divider bg-meta-warm-gray p-5">
-                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="rounded-lg border border-meta-divider bg-meta-warm-gray p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
                       <div className="mb-2 flex flex-wrap gap-2">
-                        <Badge tone="good">{atendimento.senha.senha}</Badge>
+                        <Badge tone="info">Senha {atendimento.senha.senha}</Badge>
                         <Badge tone={tomDaPrioridade(atendimento.senha.prioridade)}>{rotuloPrioridade(atendimento.senha.prioridade)}</Badge>
                       </div>
-                      <h3 className="text-xl font-semibold text-meta-charcoal">{atendimento.cidadao.nome}</h3>
-                      <p className="mt-1 text-sm text-meta-slate">{atendimento.senha.servico || "Serviço não informado"}</p>
+                      <h3 className="text-lg font-semibold text-meta-charcoal">{atendimento.cidadao.nome}</h3>
+                      <p className="mt-0.5 text-sm text-meta-slate">{atendimento.senha.servico || "Serviço não informado"}</p>
                     </div>
                     {atendimento.caso && (
-                      <div className="rounded-card bg-white px-4 py-3 text-sm shadow-sm">
-                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-meta-slate">Caso</p>
+                      <div className="text-sm md:text-right">
+                        <p className="text-[13px] font-semibold text-meta-slate">Caso</p>
                         <strong className="text-meta-charcoal">{atendimento.caso.protocolo}</strong>
                       </div>
                     )}
@@ -651,7 +647,7 @@ export default function FilaPage() {
                     />
 
                     {atendimento.encaminhamento_recebido && (
-                      <details open className="rounded-feature border border-primary/25 bg-primary/5 p-4">
+                      <details open className="rounded-lg border border-primary/30 bg-accent p-3.5 sm:p-4">
                         <summary className="cursor-pointer text-sm font-semibold text-meta-charcoal">
                           Encaminhado de {atendimento.encaminhamento_recebido.unidade_origem_nome || "outra unidade"}: a ficha que veio com a pessoa
                         </summary>
@@ -671,15 +667,10 @@ export default function FilaPage() {
                       <SecondaryButton type="button" onClick={() => setModalOpen(false)} disabled={salvando}>
                         Conferir depois
                       </SecondaryButton>
-                      <button
-                        type="button"
-                        className="button border border-red-200 !bg-red-50 !text-red-700 shadow-none hover:!bg-red-100"
-                        onClick={() => abrirModo("naoCompareceu")}
-                        disabled={salvando}
-                      >
-                        <UserX size={16} />
+                      <SecondaryButton type="button" className={PERIGO} onClick={() => abrirModo("naoCompareceu")} disabled={salvando}>
+                        <UserX size={16} aria-hidden="true" />
                         Não compareceu
-                      </button>
+                      </SecondaryButton>
                       <Button type="button" onClick={() => void iniciarAtendimento()} disabled={salvando}>
                         {salvando ? "Iniciando..." : "Iniciar atendimento"}
                       </Button>
@@ -748,18 +739,14 @@ export default function FilaPage() {
 
                 {modoModal === "naoCompareceu" && (
                   <form className="grid gap-4" onSubmit={marcarNaoCompareceu}>
-                    <div className="rounded-feature border border-red-200 bg-red-50 p-4">
-                      <div className="flex gap-3">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-white text-red-700 shadow-sm">
-                          <UserX size={18} />
-                        </span>
-                        <div>
-                          <strong className="block text-sm text-red-900">Confirmar não comparecimento?</strong>
-                          <p className="mt-1 text-sm leading-6 text-red-800">
-                            A senha será marcada como desistência e o caso será encerrado como cancelado.
-                          </p>
-                        </div>
-                      </div>
+                    <div className="rounded-lg border border-red-200 bg-red-50 p-4" role="alert">
+                      <strong className="flex items-center gap-2 text-sm text-red-900">
+                        <UserX size={16} aria-hidden="true" className="shrink-0" />
+                        Confirmar não comparecimento?
+                      </strong>
+                      <p className="mt-1 text-sm leading-6 text-red-800">
+                        A senha será marcada como desistência e o caso será encerrado como cancelado.
+                      </p>
                     </div>
                     <Field label="Motivo, opcional">
                       <textarea
@@ -773,10 +760,7 @@ export default function FilaPage() {
                       <SecondaryButton type="button" onClick={() => setModalOpen(false)} disabled={salvando}>
                         Cancelar
                       </SecondaryButton>
-                      <button
-                        className="button border border-red-200 !bg-red-600 !text-white hover:!bg-red-700"
-                        disabled={salvando}
-                      >
+                      <button className="button danger" disabled={salvando}>
                         {salvando ? "Marcando..." : "Confirmar não compareceu"}
                       </button>
                     </DialogFooter>
@@ -793,24 +777,21 @@ export default function FilaPage() {
 
 function ResumoHistorico({ historico }: { historico: EntradaHistorico[] }) {
   return (
-    <div className="rounded-feature border border-meta-divider bg-white p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="!text-base">Histórico rápido</h3>
-        <Badge tone="neutral">{historico.length}</Badge>
-      </div>
+    <div className="rounded-lg border border-meta-divider bg-white p-3.5 sm:p-4">
+      <SectionHeading title="Histórico rápido" count={historico.length} />
       {historico.length === 0 ? (
         <EmptyState title="Sem histórico recente" text="Pode iniciar o atendimento normalmente." />
       ) : (
-        <div className="grid gap-2">
+        <ul>
           {historico.slice(0, 4).map((entrada, index) => (
-            <div className="rounded-card bg-meta-soft-gray p-3" key={`${entrada.quando}-${index}`}>
-              <strong className="block text-sm text-meta-charcoal">{entrada.o_que}</strong>
-              <small className="mt-1 block text-xs leading-5 text-meta-slate">
-                {formatarDataHora(entrada.quando)} · {entrada.unidade}{entrada.detalhe ? ` · ${entrada.detalhe}` : ""}
+            <li className="line-row" key={`${entrada.quando}-${index}`}>
+              <strong className="block">{entrada.o_que}</strong>
+              <small className="mt-0.5 block">
+                {formatarDataCurta(entrada.quando)} · {entrada.unidade}{entrada.detalhe ? ` · ${entrada.detalhe}` : ""}
               </small>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );
@@ -842,10 +823,10 @@ function RegistroGuiado({
   compacto?: boolean;
 }) {
   return (
-    <div className="grid gap-4 rounded-feature border border-meta-divider bg-meta-soft-gray p-4">
+    <div className="grid gap-4 rounded-lg border border-meta-divider bg-meta-warm-gray p-3.5 sm:p-4">
       <div>
         <h3 className="!text-base">Registro do atendimento</h3>
-        <p className="mt-1 text-xs leading-5 text-meta-slate">
+        <p className="mt-1 text-[13px] leading-5 text-meta-slate">
           Preencha só o que fizer sentido. O sistema organiza isso no histórico do caso.
         </p>
       </div>
@@ -876,7 +857,7 @@ function RegistroGuiado({
         </Field>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-[0.8fr_1fr]">
+      <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Retorno necessário?">
           <Select value={retornoNecessario} onChange={(event) => setRetornoNecessario(event.target.value)}>
             <option value="">Definir depois</option>
@@ -904,83 +885,12 @@ function RegistroGuiado({
   );
 }
 
-function MiniStat({
-  title,
-  value,
-  detail,
-  icon: Icon,
-  tone,
-  onClick,
-}: {
-  onClick?: () => void;
-  title: string;
-  value: number;
-  detail: string;
-  icon: React.ElementType;
-  tone: "primary" | "neutral" | "good" | "warn" | "bad";
-}) {
-  const toneClass = {
-    primary: "bg-primary/10 text-primary",
-    neutral: "bg-meta-soft-gray text-meta-charcoal",
-    good: "bg-success/10 text-success",
-    warn: "bg-warning/20 text-[#8a5a00]",
-    bad: "bg-destructive/10 text-destructive",
-  }[tone];
-
-  const content = (
-    <Card className="h-full !p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-meta-slate">{title}</p>
-          <strong className="mt-2 block text-3xl text-meta-charcoal">{value.toLocaleString("pt-BR")}</strong>
-          <small className="mt-1 block text-meta-slate">{detail}</small>
-          {onClick && <span className="mt-2 block text-xs font-semibold text-primary">Ver registros →</span>}
-        </div>
-        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-pill ${toneClass}`}>
-          <Icon size={18} />
-        </span>
-      </div>
-    </Card>
-  );
-  return onClick ? <button type="button" onClick={onClick} aria-label={`Ver ${title.toLowerCase()}`} className="h-full text-left rounded-card transition-shadow hover:shadow-lift focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">{content}</button> : content;
-}
-
-function formatarDataHora(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
 function formatarDataSimples(value: string) {
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
   }).format(new Date(`${value}T00:00:00`));
-}
-
-function rotuloPrioridade(value: string) {
-  const labels: Record<string, string> = {
-    BAIXA: "Baixa",
-    NORMAL: "Normal",
-    ALTA: "Alta",
-    URGENTE: "Urgente",
-  };
-  return labels[value] ?? value;
-}
-
-function rotuloSituacao(value: string) {
-  const labels: Record<string, string> = {
-    EM_TRIAGEM: "Na fila/triagem",
-    EM_ATENDIMENTO: "Em atendimento",
-    CONCLUIDO: "Concluído",
-    ENCAMINHADO: "Encaminhado",
-    CANCELADO: "Cancelado",
-  };
-  return labels[value] ?? value;
 }
 
 function tituloDoModal(modo: "inicio" | "observacao" | "encaminhar" | "concluir" | "naoCompareceu", senha: string) {
@@ -1003,18 +913,4 @@ function descricaoDoModal(modo: "inicio" | "observacao" | "encaminhar" | "conclu
     naoCompareceu: "Use quando a senha foi chamada e o cidadão não se apresentou.",
   };
   return descricoes[modo];
-}
-
-function tomDaPrioridade(value: string): "neutral" | "good" | "warn" | "bad" {
-  if (value === "URGENTE") return "bad";
-  if (value === "ALTA") return "warn";
-  if (value === "BAIXA") return "good";
-  return "neutral";
-}
-
-function tomDoCaso(value: string): "neutral" | "good" | "warn" | "bad" {
-  if (value === "CONCLUIDO") return "good";
-  if (value === "CANCELADO") return "neutral";
-  if (value === "EM_ATENDIMENTO") return "warn";
-  return "bad";
 }

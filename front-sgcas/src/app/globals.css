@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 220 20% 97%;
     --foreground: 201 29% 15%;
 
     --card: 0 0% 100%;
@@ -13,85 +13,122 @@
     --popover: 0 0% 100%;
     --popover-foreground: 201 29% 15%;
 
-    --primary: 213 100% 44%;
+    /* Azul institucional: contraste de 8:1 com branco. */
+    --primary: 213 77% 34%;
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 218 100% 36%;
-    --primary-pressed: 216 100% 36%;
+    --primary-hover: 213 78% 27%;
+    --primary-pressed: 213 80% 21%;
 
-    --secondary: 210 27% 96%;
+    --secondary: 213 22% 94%;
     --secondary-foreground: 201 29% 15%;
 
     --muted: 216 20% 97%;
-    --muted-foreground: 210 14% 42%;
+    --muted-foreground: 211 19% 40%;
 
-    --accent: 214 100% 95%;
-    --accent-foreground: 213 100% 44%;
+    --accent: 213 55% 94%;
+    --accent-foreground: 213 77% 34%;
 
-    --destructive: 351 90% 41%;
+    --destructive: 351 80% 38%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 136 100% 25%;
+    --success: 142 70% 24%;
     --success-foreground: 0 0% 100%;
 
     --warning: 40 93% 56%;
     --warning-foreground: 201 29% 15%;
 
-    --border: 213 22% 89%;
-    --input: 213 22% 89%;
-    --ring: 213 100% 44%;
+    --border: 211 21% 88%;
+    --input: 211 18% 76%;
+    --ring: 213 77% 40%;
 
     --radius: 0.5rem;
-    --radius-card: 1.25rem;
-    --radius-feature: 1.5rem;
+    --radius-card: 0.625rem;
+    --radius-feature: 0.625rem;
   }
-}
 
-@layer base {
   * {
     @apply border-border;
   }
 
   html {
-    font-feature-settings: "ss01", "ss02";
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    /* A barra do topo é fixa: o que recebe foco por âncora não pode ficar embaixo dela. */
+    scroll-padding-top: 4.5rem;
   }
 
   body {
     @apply bg-meta-warm-gray text-foreground antialiased;
-    font-family: var(--font-nunito), 'Nunito', 'Noto Sans', 'Helvetica', 'Arial', sans-serif;
-    font-feature-settings: "ss01", "ss02";
+    font-family: var(--font-public-sans), 'Public Sans', 'Noto Sans', 'Helvetica', 'Arial', sans-serif;
+    font-size: 0.9375rem;
+    line-height: 1.55;
   }
 
   h1,
   h2,
   h3 {
-    letter-spacing: -0.01em;
+    @apply font-semibold tracking-tight text-meta-charcoal;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* O padrão do navegador para <small> é 11 px: pequeno demais para ler com conforto. */
+  small {
+    @apply text-[13px] leading-5;
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
 @layer utilities {
-  .frosted-nav {
-    background-color: rgba(241, 244, 247, 0.8);
-    backdrop-filter: saturate(180%) blur(20px);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
-  }
-
   .shadow-elevated {
-    box-shadow: 0 12px 28px 0 rgba(0, 0, 0, 0.12), 0 2px 4px 0 rgba(0, 0, 0, 0.08);
+    box-shadow: 0 16px 40px -8px rgba(16, 24, 40, 0.22), 0 2px 6px 0 rgba(16, 24, 40, 0.08);
   }
 
   .shadow-lift {
-    box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 2px 0 rgba(16, 24, 40, 0.06);
+  }
+
+  /*
+   * Texto que nunca empurra o contêiner: e-mail, CPF e nomes longos quebram onde
+   * precisam em vez de sair do cartão. Diferente de `break-word`, `anywhere` também
+   * reduz a largura mínima do item, então vale para filhos de flex e de grid.
+   */
+  .wrap-anywhere {
+    overflow-wrap: anywhere;
   }
 }
 
 @layer components {
   .center-screen {
-    @apply flex min-h-screen items-center justify-center bg-meta-warm-gray p-5 text-meta-charcoal;
+    @apply flex min-h-screen items-center justify-center bg-meta-warm-gray p-4 text-meta-charcoal sm:p-6;
   }
 
   .grid {
     display: grid;
-    gap: 1.25rem;
+    gap: 1rem;
+  }
+
+  /* Sem isto, um filho de grid com texto longo estica a coluna além do cartão. */
+  .grid > * {
+    min-width: 0;
   }
 
   .grid.two {
@@ -102,72 +139,96 @@
     @apply md:grid-cols-3;
   }
 
+  /* O conteúdo da página: o texto quebra dentro do espaço que tem. */
+  .page-content {
+    overflow-wrap: anywhere;
+  }
+
   .card {
-    @apply rounded-card border border-meta-divider bg-white p-5 text-meta-charcoal shadow-lift transition-all duration-300;
+    @apply rounded-card border border-meta-divider bg-white p-4 text-meta-charcoal sm:p-5;
   }
 
   .card h1 {
-    @apply text-3xl font-medium tracking-tight;
+    @apply text-2xl;
   }
 
   .card h2 {
-    @apply mb-4 text-xl font-medium tracking-tight text-meta-charcoal;
+    @apply mb-3 text-lg;
   }
 
   .card h3 {
-    @apply text-lg font-medium tracking-tight text-meta-charcoal;
+    @apply text-base;
   }
 
   .narrow-card {
     @apply w-full max-w-xl;
   }
 
+  /* Botões: retangulares com canto suave, 44 px de altura no toque e 40 px com mouse. */
   .button {
-    @apply inline-flex h-11 items-center justify-center gap-2 rounded-pill bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lift transition-all hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-transparent bg-primary px-4 py-2 text-sm font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary-hover active:bg-primary-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 md:min-h-10;
   }
 
   .button.secondary {
-    @apply bg-meta-soft-gray text-meta-charcoal shadow-none hover:bg-meta-divider;
+    @apply border-meta-divider bg-white text-meta-charcoal hover:bg-meta-soft-gray active:bg-meta-divider;
   }
 
   .button.danger {
     @apply bg-destructive text-destructive-foreground hover:bg-destructive/90;
   }
 
+  /* Compacto, para ações dentro de listas e linhas de tabela. */
+  .button.sm {
+    @apply min-h-10 px-3 py-1.5 text-[13px] md:min-h-9;
+  }
+
+  .button svg {
+    @apply shrink-0;
+  }
+
+  /* 16 px no celular: abaixo disso o iOS dá zoom ao focar o campo. */
   .input {
-    @apply flex min-h-11 w-full rounded-lg border border-input bg-white px-3 py-2 text-sm text-meta-charcoal shadow-sm transition-colors placeholder:text-meta-slate/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply flex min-h-11 w-full rounded-lg border border-input bg-white px-3 py-2 text-base text-meta-charcoal transition-colors placeholder:text-meta-slate/70 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25 disabled:cursor-not-allowed disabled:bg-meta-soft-gray disabled:opacity-70 md:min-h-10 md:text-sm;
   }
 
   textarea.input {
-    @apply min-h-28 resize-y;
+    @apply min-h-24 resize-y;
   }
 
   .field {
-    @apply grid gap-2 text-sm font-medium text-meta-charcoal;
+    @apply grid gap-1.5 text-sm text-meta-charcoal;
   }
 
   .field > span {
-    @apply text-xs font-semibold uppercase tracking-[0.12em] text-meta-slate;
+    @apply text-[13px] font-semibold text-meta-charcoal;
+  }
+
+  .field-hint {
+    @apply text-xs leading-5 text-meta-slate;
+  }
+
+  .field-error {
+    @apply text-xs font-medium leading-5 text-destructive;
   }
 
   .page-header {
-    @apply mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between;
+    @apply mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6;
   }
 
   .page-header h1 {
-    @apply text-2xl font-medium tracking-tight text-meta-charcoal md:text-3xl;
+    @apply text-2xl md:text-[1.75rem] md:leading-9;
   }
 
   .page-header p {
-    @apply mt-2 max-w-2xl text-sm leading-6 text-meta-slate;
+    @apply mt-1 max-w-2xl text-sm leading-6 text-meta-slate;
   }
 
   .page-action {
-    @apply flex shrink-0 items-center gap-2;
+    @apply flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end;
   }
 
   .toolbar {
-    @apply mb-5 flex flex-col gap-3 sm:flex-row;
+    @apply mb-4 flex flex-col gap-3 sm:flex-row;
   }
 
   .toolbar .input {
@@ -175,15 +236,15 @@
   }
 
   .row {
-    @apply flex flex-wrap items-center gap-3;
+    @apply flex flex-wrap items-center gap-2;
   }
 
   .line-row {
-    @apply border-t border-meta-divider/80 py-4 first:border-t-0 first:pt-0 last:pb-0;
+    @apply border-t border-meta-divider py-3 first:border-t-0 first:pt-0 last:pb-0;
   }
 
   .plain-row {
-    @apply flex w-full items-center justify-between gap-3 border-t border-meta-divider/80 py-4 text-left transition-colors first:border-t-0 first:pt-0 hover:text-primary;
+    @apply flex w-full items-center justify-between gap-3 border-t border-meta-divider py-3 text-left transition-colors first:border-t-0 first:pt-0 hover:text-primary;
   }
 
   .plain-row strong,
@@ -198,11 +259,11 @@
 
   .plain-row small,
   .line-row small {
-    @apply text-xs text-meta-slate;
+    @apply text-[13px] leading-5 text-meta-slate;
   }
 
   .badge {
-    @apply inline-flex w-fit items-center rounded-pill border px-2.5 py-1 text-xs font-semibold;
+    @apply inline-flex w-fit items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold leading-5;
   }
 
   .badge.neutral {
@@ -210,31 +271,43 @@
   }
 
   .badge.good {
-    @apply border-emerald-200 bg-emerald-50 text-emerald-700;
+    @apply border-emerald-200 bg-emerald-50 text-emerald-800;
   }
 
   .badge.warn {
-    @apply border-amber-200 bg-amber-50 text-amber-700;
+    @apply border-amber-200 bg-amber-50 text-amber-800;
   }
 
   .badge.bad {
-    @apply border-red-200 bg-red-50 text-red-700;
+    @apply border-red-200 bg-red-50 text-red-800;
   }
 
+  .badge.info {
+    @apply border-blue-200 bg-blue-50 text-blue-800;
+  }
+
+  /* Estado vazio: uma frase de apoio, sem caixa dentro da caixa. */
   .empty {
-    @apply rounded-feature border border-dashed border-meta-divider bg-meta-warm-gray p-8 text-center;
+    @apply px-4 py-8 text-center;
   }
 
   .empty strong {
-    @apply block text-base font-semibold text-meta-charcoal;
+    @apply block text-sm font-semibold text-meta-charcoal;
   }
 
   .empty span {
-    @apply mt-1 block text-sm leading-6 text-meta-slate;
+    @apply mx-auto mt-1 block max-w-md text-sm leading-6 text-meta-slate;
   }
 
   .notice {
-    @apply rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950;
+    @apply rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950;
+  }
+
+  /* ---------- Tabelas ---------- */
+
+  /* Rolagem só quando a tabela é mais larga que o espaço, sem estourar a página. */
+  .table-wrap {
+    @apply -mx-4 overflow-x-auto px-4 sm:-mx-5 sm:px-5;
   }
 
   .table {
@@ -242,11 +315,22 @@
   }
 
   .table th {
-    @apply border-b border-meta-divider px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.12em] text-meta-slate;
+    @apply whitespace-nowrap border-b border-meta-divider px-3 py-2 text-left text-xs font-semibold text-meta-slate;
   }
 
   .table td {
-    @apply border-b border-meta-divider/70 px-3 py-2.5 text-meta-charcoal;
+    @apply border-b border-meta-divider px-3 py-3 align-top text-meta-charcoal;
+  }
+
+  /* Em tabela a palavra não se parte no meio: a coluna cresce, e a rolagem do .table-wrap dá conta do resto. */
+  .table th,
+  .table td {
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  .table tbody tr:last-child td {
+    @apply border-b-0;
   }
 
   .table .clickable-row {
@@ -257,8 +341,148 @@
     @apply font-semibold text-meta-charcoal;
   }
 
+  /*
+   * No celular a tabela vira uma lista (e, em `table-stack-lg`, também no tablet): cada linha é um bloco e cada célula mostra o
+   * próprio rótulo (o `data-label` do <td>). Três colunas já não cabem em 360 px.
+   */
+  @media (max-width: 767px) {
+    .table-stack,
+    .table-stack tbody,
+    .table-stack tr,
+    .table-stack td {
+      display: block;
+      width: 100%;
+    }
+
+    .table-stack thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+    }
+
+    .table-stack tr {
+      margin-bottom: 0.75rem;
+      padding: 0.25rem 0.875rem;
+      border: 1px solid theme('colors.meta.divider');
+      border-radius: var(--radius-card);
+      background: #fff;
+    }
+
+    .table-stack tbody tr:last-child {
+      margin-bottom: 0;
+    }
+
+    .table-stack td {
+      display: grid;
+      grid-template-columns: minmax(5.5rem, 36%) minmax(0, 1fr);
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid theme('colors.meta.divider');
+    }
+
+    /* O conteúdo da célula (nome e legenda, por exemplo) fica todo na coluna do valor. */
+    .table-stack td > * {
+      grid-column: 2;
+    }
+
+    .table-stack td:last-child {
+      border-bottom: 0;
+    }
+
+    .table-stack td::before {
+      content: attr(data-label);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: theme('colors.meta.slate');
+    }
+
+    /* Célula sem rótulo (ações): ocupa a largura toda. */
+    .table-stack td:not([data-label]) {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .table-stack td:not([data-label])::before {
+      content: none;
+    }
+  }
+
+
+  @media (max-width: 1023px) {
+    .table-stack-lg,
+    .table-stack-lg tbody,
+    .table-stack-lg tr,
+    .table-stack-lg td {
+      display: block;
+      width: 100%;
+    }
+
+    .table-stack-lg thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+    }
+
+    .table-stack-lg tr {
+      margin-bottom: 0.75rem;
+      padding: 0.25rem 0.875rem;
+      border: 1px solid theme('colors.meta.divider');
+      border-radius: var(--radius-card);
+      background: #fff;
+    }
+
+    .table-stack-lg tbody tr:last-child {
+      margin-bottom: 0;
+    }
+
+    .table-stack-lg td {
+      display: grid;
+      grid-template-columns: minmax(5.5rem, 36%) minmax(0, 1fr);
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid theme('colors.meta.divider');
+    }
+
+    /* O conteúdo da célula (nome e legenda, por exemplo) fica todo na coluna do valor. */
+    .table-stack-lg td > * {
+      grid-column: 2;
+    }
+
+    .table-stack-lg td:last-child {
+      border-bottom: 0;
+    }
+
+    .table-stack-lg td::before {
+      content: attr(data-label);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: theme('colors.meta.slate');
+    }
+
+    /* Célula sem rótulo (ações): ocupa a largura toda. */
+    .table-stack-lg td:not([data-label]) {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .table-stack-lg td:not([data-label])::before {
+      content: none;
+    }
+  }
+
+
+  /* ---------- Indicadores ---------- */
+
   .dashboard-stats .stat {
-    @apply min-h-40;
+    @apply min-h-0;
   }
 
   .stat-head {
@@ -270,33 +494,69 @@
     @apply text-sm font-medium text-meta-slate;
   }
 
+  /* Ícone simples ao lado do rótulo; sem bolha colorida. */
   .stat-icon {
-    @apply flex h-10 w-10 items-center justify-center rounded-pill bg-meta-baby-blue text-primary;
+    @apply flex h-5 w-5 shrink-0 items-center justify-center text-meta-slate;
+  }
+
+  .stat-icon svg {
+    @apply h-[18px] w-[18px];
   }
 
   .stat strong {
-    @apply mt-5 block text-4xl font-medium tracking-tight text-meta-charcoal;
+    @apply mt-2 block text-3xl font-semibold tabular-nums tracking-tight text-meta-charcoal;
   }
 
   .stat small {
-    @apply mt-2 block text-sm leading-6 text-meta-slate;
+    @apply mt-1 block text-[13px] leading-5 text-meta-slate;
   }
 
+  /* No celular o indicador vira uma linha: rótulo e apoio à esquerda, o número à direita. */
+  @media (max-width: 639px) {
+    .stat:not(.stat-v) {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      column-gap: 1rem;
+      align-items: center;
+      padding-top: 0.75rem;
+      padding-bottom: 0.75rem;
+    }
+
+    .stat:not(.stat-v) .stat-head {
+      grid-column: 1;
+      grid-row: 1;
+    }
+
+    .stat:not(.stat-v) .stat-icon {
+      display: none;
+    }
+
+    .stat:not(.stat-v) > strong {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      margin-top: 0;
+      font-size: 1.75rem;
+      line-height: 1.1;
+    }
+
+    .stat:not(.stat-v) > small {
+      grid-column: 1;
+      grid-row: 2;
+      margin-top: 0.125rem;
+    }
+
+    /* O que vier depois (um link, um botão) ocupa a linha de baixo, inteira. */
+    .stat:not(.stat-v) > :not(.stat-head):not(strong):not(small) {
+      grid-column: 1 / -1;
+    }
+  }
+
+  /* O indicador principal ganha uma barra lateral, não um bloco azul. */
   .hero-stat {
-    @apply bg-primary text-primary-foreground;
-  }
-
-  .hero-stat .stat-head span,
-  .hero-stat small,
-  .hero-stat strong {
-    @apply text-primary-foreground;
-  }
-
-  .hero-stat .stat-icon {
-    @apply bg-white/15 text-white;
+    @apply border-l-4 border-l-primary;
   }
 
   .action-stat {
-    @apply flex flex-col justify-between;
+    @apply flex flex-col justify-between gap-3;
   }
 }

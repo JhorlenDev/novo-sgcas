@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CalendarClock, ClipboardList, Gift, Home, Plus, Send, ShieldCheck, Stethoscope, UsersRound } from "lucide-react";
+import { ArrowLeft, CalendarClock, ClipboardList, FolderOpen, Gift, House, Plus, Send, ShieldCheck, Users } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, SecondaryButton, Select } from "@/components/ui";
+import { Badge, Button, Card, DadosEmLista, EmptyState, Field, Input, PageHeader, SecondaryButton, SectionHeading, Select, Stat } from "@/components/ui";
 import { AvisoDeDuplicidade, alertasDoErro, justificativaValida, mensagemDeDuplicidade, useDuplicidade } from "@/components/duplicidade/aviso";
 import { DetalheDoEncaminhamento } from "@/components/encaminhamentos/detalhe";
 import { destinoDoEncaminhamento } from "@/components/encaminhamentos/ficha";
@@ -14,6 +14,8 @@ import {
   type FormularioDeEncaminhamento,
 } from "@/components/encaminhamentos/formulario";
 import { api, mensagemDaApi } from "@/lib/api";
+import { rotuloPrioridade, rotuloSituacao, rotuloSituacaoDaSenha, tomDoCaso } from "@/lib/casos";
+import { formatarData, formatarDataHora } from "@/lib/datas";
 import { rotuloDaSituacao } from "@/lib/encaminhamentos";
 import { AnexosPanel } from "./anexos-panel";
 import type { AlertaDeDuplicidade, AtendimentoRecepcao, BeneficioEventual, Caso, Cidadao, Encaminhamento, EntradaHistorico, ProntuarioCidadao, Senha, Unidade } from "@/types/sgcas";
@@ -61,8 +63,8 @@ export default function ProntuarioPage() {
   return (
     <AppShell>
       <div className="mb-4">
-        <SecondaryButton type="button" className="h-9 px-3 text-xs" onClick={() => router.back()}>
-          <ArrowLeft size={15} />
+        <SecondaryButton type="button" size="sm" onClick={() => router.back()}>
+          <ArrowLeft size={15} aria-hidden="true" />
           Voltar
         </SecondaryButton>
       </div>
@@ -70,42 +72,42 @@ export default function ProntuarioPage() {
       <PageHeader
         title={cidadao?.nome ?? "Prontuário do cidadão"}
         description={cidadao ? [cidadao.cpf, cidadao.email, cidadao.telefone].filter(Boolean).join(" · ") || "Cadastro sem documento principal" : "Carregando..."}
-        action={cidadao ? <Link href="/recepcao"><Button type="button">Nova recepção</Button></Link> : null}
+        action={cidadao ? <Link href="/recepcao" className="button">Nova recepção</Link> : null}
       />
 
-      {erro && <div className="notice">{erro}</div>}
+      {erro && <div className="notice mb-4" role="alert">{erro}</div>}
       {carregando && <Card><EmptyState title="Carregando prontuário" text="Buscando cadastro, histórico e registros vinculados." /></Card>}
 
       {prontuario && cidadao && resumo && (
-        <div className="grid gap-5">
-          <div className="grid gap-3 md:grid-cols-4">
-            <Resumo title="Casos ativos" value={resumo.casosAbertos} icon={ClipboardList} tone={resumo.casosAbertos ? "warn" : "good"} />
-            <Resumo title="Benefícios" value={resumo.beneficios} icon={Gift} tone="primary" />
-            <Resumo title="Encaminhamentos" value={resumo.encaminhamentos} icon={Send} tone="neutral" />
-            <Resumo title="Família" value={resumo.familia} icon={UsersRound} tone="neutral" />
+        <div className="grid gap-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <Stat label="Casos ativos" vertical value={resumo.casosAbertos} icon={ClipboardList} highlight={resumo.casosAbertos > 0} />
+            <Stat label="Benefícios" vertical value={resumo.beneficios} icon={Gift} />
+            <Stat label="Encaminhamentos" vertical value={resumo.encaminhamentos} icon={Send} />
+            <Stat label="Família" vertical value={resumo.familia} icon={Users} />
           </div>
 
-          <div className="grid gap-5 xl:grid-cols-2">
+          <div className="grid gap-4 xl:grid-cols-2">
             <DadosCadastrais cidadao={cidadao} />
             <DadosEndereco cidadao={cidadao} enderecoDetalhado={prontuario.endereco_detalhado} />
           </div>
 
-          <div className="grid gap-5 xl:grid-cols-2">
+          <div className="grid gap-4 xl:grid-cols-2">
             <DadosSocioeconomicos dados={prontuario.socioeconomico} />
             <MembrosFamilia membros={prontuario.membros_da_familia} />
           </div>
 
-          <div className="grid gap-5 xl:grid-cols-2">
+          <div className="grid gap-4 xl:grid-cols-2">
             <AtendimentosPanel atendimentos={prontuario.atendimentos_recepcao} senhas={prontuario.senhas} />
             <CasosPanel casos={prontuario.casos} />
           </div>
 
-          <div className="grid gap-5 xl:grid-cols-2">
+          <div className="grid gap-4 xl:grid-cols-2">
             <BeneficiosPanel cidadao={cidadao} beneficios={prontuario.beneficios_eventuais} onSaved={carregarProntuario} />
             <EncaminhamentosPanel cidadao={cidadao} casos={prontuario.casos} encaminhamentos={prontuario.encaminhamentos} unidades={unidades} onSaved={carregarProntuario} />
           </div>
 
-          <div className="grid gap-5 xl:grid-cols-2">
+          <div className="grid gap-4 xl:grid-cols-2">
             <AnexosPanel cidadaoId={cidadao.id} anexos={prontuario.anexos} tipos={prontuario.tipos_de_anexo} onChanged={carregarProntuario} />
             <HistoricoPanel historico={prontuario.historico} />
           </div>
@@ -120,7 +122,7 @@ export default function ProntuarioPage() {
 function DadosCadastrais({ cidadao }: { cidadao: Cidadao }) {
   return (
     <Card>
-      <Titulo icon={ShieldCheck} title="Dados pessoais" count={null} />
+      <SectionHeading icon={ShieldCheck} title="Dados pessoais" />
       <InfoGrid rows={[
         ["CPF", cidadao.cpf],
         ["NIS", cidadao.nis],
@@ -139,7 +141,7 @@ function DadosCadastrais({ cidadao }: { cidadao: Cidadao }) {
 function DadosEndereco({ cidadao, enderecoDetalhado }: { cidadao: Cidadao; enderecoDetalhado: Record<string, unknown> }) {
   return (
     <Card>
-      <Titulo icon={Home} title="Endereço e moradia" count={null} />
+      <SectionHeading icon={House} title="Endereço e moradia" />
       <InfoGrid rows={[
         ["Endereço", [cidadao.endereco, cidadao.bairro, cidadao.cidade, cidadao.uf].filter(Boolean).join(", ")],
         ["CEP", cidadao.cep],
@@ -158,7 +160,7 @@ function DadosSocioeconomicos({ dados }: { dados: Record<string, unknown> }) {
 
   return (
     <Card>
-      <Titulo icon={ClipboardList} title="Socioeconômico" count={null} />
+      <SectionHeading icon={ClipboardList} title="Socioeconômico" />
       <InfoGrid rows={[
         ["Renda total", valor(dados.renda_total)],
         ["Origem da renda", valor(dados.precedencia_rendimento)],
@@ -177,21 +179,24 @@ function DadosSocioeconomicos({ dados }: { dados: Record<string, unknown> }) {
 function MembrosFamilia({ membros }: { membros: Record<string, unknown>[] }) {
   return (
     <Card>
-      <Titulo icon={UsersRound} title="Composição familiar" count={membros.length} />
+      <SectionHeading icon={Users} title="Composição familiar" count={membros.length} />
       {membros.length === 0 ? <EmptyState title="Sem membros cadastrados" text="A composição familiar aparece aqui quando informada no cadastro." /> : (
-        <div className="grid gap-2">
+        <ul>
           {membros.map((membro, index) => (
-            <div className="rounded-card border border-meta-divider bg-meta-warm-gray p-3" key={index}>
-              <strong className="block text-sm text-meta-charcoal">{valor(membro.nome_membro) || `Membro ${index + 1}`}</strong>
-              <div className="mt-2 grid gap-2 text-xs text-meta-slate sm:grid-cols-2">
-                <span>Parentesco: {valor(membro.parentesco) || "-"}</span>
-                <span>CPF: {membro.nao_possui_cpf ? "Não possui" : valor(membro.cpf_membro) || "-"}</span>
-                <span>Nascimento: {valor(membro.data_nascimento) || "-"}</span>
-                <span>Escolaridade: {valor(membro.escolaridade) || "-"}</span>
-              </div>
-            </div>
+            <li className="line-row" key={index}>
+              <strong className="block">{valor(membro.nome_membro) || `Membro ${index + 1}`}</strong>
+              <DadosEmLista
+                className="mt-2 !gap-y-1.5"
+                itens={[
+                  { rotulo: "Parentesco", valor: valor(membro.parentesco) || "—" },
+                  { rotulo: "CPF", valor: membro.nao_possui_cpf ? "Não possui" : valor(membro.cpf_membro) || "—" },
+                  { rotulo: "Nascimento", valor: valor(membro.data_nascimento) || "—" },
+                  { rotulo: "Escolaridade", valor: valor(membro.escolaridade) || "—" },
+                ]}
+              />
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </Card>
   );
@@ -200,28 +205,30 @@ function MembrosFamilia({ membros }: { membros: Record<string, unknown>[] }) {
 function AtendimentosPanel({ atendimentos, senhas }: { atendimentos: AtendimentoRecepcao[]; senhas: Senha[] }) {
   const itens = [
     ...atendimentos.slice(0, 8).map((item) => ({ id: `a-${item.id}`, title: `${rotuloDesfecho(item.desfecho)} · ${item.demanda}`, detail: `${item.unidade_nome} · ${formatarDataHora(item.criado_em)}${item.observacao ? ` · ${item.observacao}` : ""}` })),
-    ...senhas.slice(0, 8).map((senha) => ({ id: `s-${senha.id}`, title: `Senha ${senha.senha} · ${rotuloSituacaoFila(senha.situacao)}`, detail: `${senha.servico || "Serviço não informado"} · ${rotuloPrioridade(senha.prioridade)} · ${formatarDataHora(senha.criado_em)}` })),
+    ...senhas.slice(0, 8).map((senha) => ({ id: `s-${senha.id}`, title: `Senha ${senha.senha} · ${rotuloSituacaoDaSenha(senha.situacao)}`, detail: `${senha.servico || "Serviço não informado"} · ${rotuloPrioridade(senha.prioridade)} · ${formatarDataHora(senha.criado_em)}` })),
   ];
-  return <Card><Titulo icon={Stethoscope} title="Atendimentos e fila" count={itens.length} /><ListaOuVazio itens={itens} vazio="Passagens pela recepção e senhas aparecem aqui." /></Card>;
+  return <Card><SectionHeading icon={ClipboardList} title="Atendimentos e fila" count={itens.length} /><ListaOuVazio itens={itens} vazio="Passagens pela recepção e senhas aparecem aqui." /></Card>;
 }
 
 function CasosPanel({ casos }: { casos: Caso[] }) {
   return (
     <Card>
-      <Titulo icon={ClipboardList} title="Casos" count={casos.length} />
+      <SectionHeading icon={FolderOpen} title="Casos" count={casos.length} />
       {casos.length === 0 ? <EmptyState title="Sem casos" text="Casos abertos pela recepção ou atendimento aparecem aqui." /> : (
-        <div className="grid gap-2">
+        <ul>
           {casos.map((caso) => (
-            <Link className="block rounded-card border border-meta-divider bg-meta-warm-gray p-3 transition-all hover:border-primary/30 hover:bg-white hover:shadow-lift" href="/casos" key={caso.id}>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <strong className="text-sm text-meta-charcoal">{caso.protocolo}</strong>
-                <Badge tone={tomDoCaso(caso.situacao)}>{rotuloSituacao(caso.situacao)}</Badge>
-              </div>
-              <p className="mt-1 text-xs text-meta-slate">{caso.servico_nome || "Serviço não informado"} · {caso.unidade_nome}</p>
-              {caso.descricao && <p className="mt-2 line-clamp-2 text-xs leading-5 text-meta-charcoal">{caso.descricao}</p>}
-            </Link>
+            <li className="line-row" key={caso.id}>
+              <Link className="block rounded-md transition-colors hover:text-primary" href="/casos">
+                <span className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                  <strong>{caso.protocolo}</strong>
+                  <Badge tone={tomDoCaso(caso.situacao)}>{rotuloSituacao(caso.situacao)}</Badge>
+                </span>
+                <small className="mt-0.5 block">{caso.servico_nome || "Serviço não informado"} · {caso.unidade_nome}</small>
+                {caso.descricao && <span className="mt-1 line-clamp-2 block text-[13px] leading-5 text-meta-charcoal">{caso.descricao}</span>}
+              </Link>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </Card>
   );
@@ -282,15 +289,15 @@ function BeneficiosPanel({ cidadao, beneficios, onSaved }: { cidadao: Cidadao; b
 
   return (
     <Card>
-      <TituloAcao icon={Gift} title="Benefícios eventuais" count={beneficios.length} action={
-        <SecondaryButton type="button" className="h-9 px-3 text-xs" onClick={() => setAberto((valor) => !valor)}>
-          <Plus size={14} />
+      <SectionHeading icon={Gift} title="Benefícios eventuais" count={beneficios.length} action={
+        <SecondaryButton type="button" size="sm" onClick={() => setAberto((valor) => !valor)}>
+          <Plus size={14} aria-hidden="true" />
           Registrar
         </SecondaryButton>
       } />
 
       {aberto && (
-        <div className="mb-4 rounded-card border border-primary/15 bg-primary/5 p-3">
+        <div className="mb-4 rounded-lg border border-meta-divider bg-meta-warm-gray p-3 sm:p-4">
           <div className="grid gap-3 md:grid-cols-2">
             <Field label="Pessoa beneficiada">
               <Input value={form.nome_da_pessoa} onChange={(event) => mudar({ nome_da_pessoa: event.target.value })} />
@@ -320,10 +327,10 @@ function BeneficiosPanel({ cidadao, beneficios, onSaved }: { cidadao: Cidadao; b
           <div className="mt-3">
             <AvisoDeDuplicidade alertas={alertas} justificativa={justificativa} onChange={setJustificativa} />
           </div>
-          {erro && <p role="alert" className="mt-2 text-xs font-semibold text-danger">{erro}</p>}
+          {erro && <p role="alert" className="field-error mt-2">{erro}</p>}
           <div className="mt-3 flex justify-end gap-2">
-            <SecondaryButton type="button" className="h-9 px-3 text-xs" onClick={() => setAberto(false)}>Cancelar</SecondaryButton>
-            <Button type="button" className="h-9 px-3 text-xs" disabled={salvando} onClick={salvar}>{salvando ? "Salvando..." : "Salvar benefício"}</Button>
+            <SecondaryButton type="button" size="sm" onClick={() => setAberto(false)}>Cancelar</SecondaryButton>
+            <Button type="button" size="sm" disabled={salvando} onClick={salvar}>{salvando ? "Salvando..." : "Salvar benefício"}</Button>
           </div>
         </div>
       )}
@@ -369,15 +376,15 @@ function EncaminhamentosPanel({ cidadao, casos, encaminhamentos, unidades, onSav
 
   return (
     <Card>
-      <TituloAcao icon={Send} title="Encaminhamentos" count={encaminhamentos.length} action={
-        <SecondaryButton type="button" className="h-9 px-3 text-xs" onClick={() => setAberto((valor) => !valor)}>
-          <Plus size={14} />
+      <SectionHeading icon={Send} title="Encaminhamentos" count={encaminhamentos.length} action={
+        <SecondaryButton type="button" size="sm" onClick={() => setAberto((valor) => !valor)}>
+          <Plus size={14} aria-hidden="true" />
           Registrar
         </SecondaryButton>
       } />
 
       {aberto && (
-        <div className="mb-4 rounded-card border border-primary/15 bg-primary/5 p-3">
+        <div className="mb-4 rounded-lg border border-meta-divider bg-meta-warm-gray p-3 sm:p-4">
           <div className="mb-4">
             <Field label="Vincular a caso">
               <Select value={casoId} onChange={(event) => setCasoId(event.target.value)}>
@@ -387,10 +394,10 @@ function EncaminhamentosPanel({ cidadao, casos, encaminhamentos, unidades, onSav
             </Field>
           </div>
           <CamposDeEncaminhamento valor={form} onChange={setForm} unidades={unidades} erros={erros} />
-          {erro && <p role="alert" className="mt-2 text-xs font-semibold text-danger">{erro}</p>}
+          {erro && <p role="alert" className="field-error mt-2">{erro}</p>}
           <div className="mt-3 flex justify-end gap-2">
-            <SecondaryButton type="button" className="h-9 px-3 text-xs" onClick={() => setAberto(false)}>Cancelar</SecondaryButton>
-            <Button type="button" className="h-9 px-3 text-xs" disabled={salvando} onClick={salvar}>{salvando ? "Salvando..." : "Salvar encaminhamento"}</Button>
+            <SecondaryButton type="button" size="sm" onClick={() => setAberto(false)}>Cancelar</SecondaryButton>
+            <Button type="button" size="sm" disabled={salvando} onClick={salvar}>{salvando ? "Salvando..." : "Salvar encaminhamento"}</Button>
           </div>
         </div>
       )}
@@ -398,25 +405,26 @@ function EncaminhamentosPanel({ cidadao, casos, encaminhamentos, unidades, onSav
       {encaminhamentos.length === 0 ? (
         <EmptyState title="Sem registros" text="Encaminhamentos internos ou externos aparecem aqui." />
       ) : (
-        <div className="grid gap-2">
+        <ul>
           {encaminhamentos.map((e) => (
-            <button
-              type="button"
-              key={e.id}
-              onClick={() => setFichaAberta(e.id)}
-              className="rounded-card border border-meta-divider bg-meta-warm-gray p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
-              aria-label={`Abrir a ficha do encaminhamento para ${destinoDoEncaminhamento(e)}`}
-            >
-              <strong className="block text-sm text-meta-charcoal">
-                {(e.unidade_origem_nome || "Origem")} → {destinoDoEncaminhamento(e)} · {rotuloDaSituacao(e.situacao)}
-              </strong>
-              <p className="mt-1 text-xs leading-5 text-meta-slate">
-                {formatarDataHora(e.criado_em)} · {e.categoria_rotulo} · Urgência {e.urgencia_rotulo.toLowerCase()}
-                {e.motivo ? ` · ${e.motivo}` : ""}
-              </p>
-            </button>
+            <li className="line-row" key={e.id}>
+              <button
+                type="button"
+                onClick={() => setFichaAberta(e.id)}
+                className="block w-full rounded-md text-left transition-colors hover:text-primary"
+                aria-label={`Abrir a ficha do encaminhamento para ${destinoDoEncaminhamento(e)}`}
+              >
+                <strong className="block text-sm">
+                  {(e.unidade_origem_nome || "Origem")} → {destinoDoEncaminhamento(e)} · {rotuloDaSituacao(e.situacao)}
+                </strong>
+                <small className="mt-0.5 block">
+                  {formatarDataHora(e.criado_em)} · {e.categoria_rotulo} · Urgência {e.urgencia_rotulo.toLowerCase()}
+                  {e.motivo ? ` · ${e.motivo}` : ""}
+                </small>
+              </button>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
 
       <DetalheDoEncaminhamento id={fichaAberta} onClose={() => setFichaAberta(null)} onMudou={() => void onSaved()} />
@@ -425,13 +433,13 @@ function EncaminhamentosPanel({ cidadao, casos, encaminhamentos, unidades, onSav
 }
 
 function HistoricoPanel({ historico }: { historico: EntradaHistorico[] }) {
-  return <Card><Titulo icon={CalendarClock} title="Histórico municipal" count={historico.length} /><ListaOuVazio itens={historico.map((h, i) => ({ id: `${h.quando}-${i}`, title: h.o_que, detail: `${h.unidade} · ${formatarDataHora(h.quando)}${h.detalhe ? ` · ${h.detalhe}` : ""}` }))} vazio="Os atendimentos desta pessoa aparecem aqui." /></Card>;
+  return <Card><SectionHeading icon={CalendarClock} title="Histórico municipal" count={historico.length} /><ListaOuVazio itens={historico.map((h, i) => ({ id: `${h.quando}-${i}`, title: h.o_que, detail: `${h.unidade} · ${formatarDataHora(h.quando)}${h.detalhe ? ` · ${h.detalhe}` : ""}` }))} vazio="Os atendimentos desta pessoa aparecem aqui." /></Card>;
 }
 
 function PrivacidadePanel({ cidadao }: { cidadao: Cidadao }) {
   return (
     <Card>
-      <Titulo icon={ShieldCheck} title="Privacidade e LGPD" count={null} />
+      <SectionHeading icon={ShieldCheck} title="Privacidade e LGPD" />
       <p className="text-sm leading-6 text-meta-slate">Imprima o prontuário para uso administrativo ou exporte os dados pessoais em JSON quando houver solicitação LGPD.</p>
       <div className="mt-4 flex flex-wrap gap-2">
         <a className="button" href={`/api/citizens/${cidadao.id}/imprimir`} target="_blank" rel="noreferrer">Imprimir prontuário</a>
@@ -442,45 +450,33 @@ function PrivacidadePanel({ cidadao }: { cidadao: Cidadao }) {
   );
 }
 
-function Titulo({ icon: Icon, title, count }: { icon: React.ElementType; title: string; count: number | null }) {
-  return <div className="mb-4 flex items-center justify-between gap-3"><div className="row !justify-start"><span className="flex h-9 w-9 items-center justify-center rounded-pill bg-primary/10 text-primary"><Icon size={17} /></span><h2 className="!mb-0 !text-lg">{title}</h2></div>{count !== null && <Badge tone="neutral">{count}</Badge>}</div>;
+function InfoGrid({ rows }: { rows: Array<[string, string | null | undefined]> }) {
+  const visibleRows = rows.filter(([, value]) => value !== undefined && value !== null && value !== "");
+  if (visibleRows.length === 0) return <EmptyState title="Sem dados" text="Nenhuma informação registrada nesta seção." />;
+  return <DadosEmLista itens={visibleRows.map(([rotulo, valor]) => ({ rotulo, valor }))} />;
 }
 
-function TituloAcao({ icon: Icon, title, count, action }: { icon: React.ElementType; title: string; count: number; action: React.ReactNode }) {
+function ListaSimples({ titulo, itens }: { titulo: string; itens: Array<{ id: string; title: string | null; detail?: string | null }> }) {
   return (
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <div className="row !justify-start">
-        <span className="flex h-9 w-9 items-center justify-center rounded-pill bg-primary/10 text-primary"><Icon size={17} /></span>
-        <h2 className="!mb-0 !text-lg">{title}</h2>
-        <Badge tone="neutral">{count}</Badge>
-      </div>
-      {action}
+    <div className="mt-4 border-t border-meta-divider pt-4">
+      <h3 className="mb-1 !text-sm">{titulo}</h3>
+      <ul>{itens.map((item) => <MiniLinha key={item.id} title={item.title} detail={item.detail} />)}</ul>
     </div>
   );
 }
 
-function Resumo({ title, value, icon: Icon, tone }: { title: string; value: number; icon: React.ElementType; tone: "primary" | "neutral" | "good" | "warn" }) {
-  const toneClass = { primary: "bg-primary/10 text-primary", neutral: "bg-meta-soft-gray text-meta-charcoal", good: "bg-success/10 text-success", warn: "bg-warning/20 text-[#8a5a00]" }[tone];
-  return <Card className="!p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-meta-slate">{title}</p><strong className="mt-2 block text-3xl text-meta-charcoal">{value}</strong></div><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-pill ${toneClass}`}><Icon size={18} /></span></div></Card>;
-}
-
-function InfoGrid({ rows }: { rows: Array<[string, string | null | undefined]> }) {
-  const visibleRows = rows.filter(([, value]) => value !== undefined && value !== null && value !== "");
-  if (visibleRows.length === 0) return <EmptyState title="Sem dados" text="Nenhuma informação registrada nesta seção." />;
-  return <div className="grid gap-2">{visibleRows.map(([label, value]) => <div className="flex items-start justify-between gap-4 rounded-card bg-meta-warm-gray px-3 py-2 text-sm" key={label}><span className="text-meta-slate">{label}</span><strong className="max-w-[62%] text-right font-medium text-meta-charcoal">{value}</strong></div>)}</div>;
-}
-
-function ListaSimples({ titulo, itens }: { titulo: string; itens: Array<{ id: string; title: string | null; detail?: string | null }> }) {
-  return <div className="mt-4"><h3 className="mb-2 text-sm font-semibold">{titulo}</h3><div className="grid gap-2">{itens.map((item) => <MiniLinha key={item.id} title={item.title} detail={item.detail} />)}</div></div>;
-}
-
 function ListaOuVazio({ itens, vazio }: { itens: Array<{ id: string; title: string | null; detail?: string | null }>; vazio: string }) {
   if (itens.length === 0) return <EmptyState title="Sem registros" text={vazio} />;
-  return <div className="grid gap-2">{itens.map((item) => <MiniLinha key={item.id} title={item.title} detail={item.detail} />)}</div>;
+  return <ul>{itens.map((item) => <MiniLinha key={item.id} title={item.title} detail={item.detail} />)}</ul>;
 }
 
 function MiniLinha({ title, detail }: { title: string | null | undefined; detail?: string | null }) {
-  return <div className="rounded-card border border-meta-divider bg-meta-warm-gray p-3"><strong className="block text-sm text-meta-charcoal">{title || "Registro"}</strong>{detail && <p className="mt-1 text-xs leading-5 text-meta-slate">{detail}</p>}</div>;
+  return (
+    <li className="line-row">
+      <strong className="block">{title || "Registro"}</strong>
+      {detail && <small className="mt-0.5 block">{detail}</small>}
+    </li>
+  );
 }
 
 function valor(value: unknown) {
@@ -496,16 +492,4 @@ function booleano(value: unknown) {
   return value ? "Sim" : "Não";
 }
 
-function formatarData(value: string) {
-  return new Intl.DateTimeFormat("pt-BR").format(new Date(value));
-}
-
-function formatarDataHora(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
-}
-
 function rotuloDesfecho(value: string) { return value === "FINALIZADO" ? "Finalizado na recepção" : "Encaminhado para fila"; }
-function rotuloPrioridade(value: string) { return ({ BAIXA: "Baixa", NORMAL: "Normal", ALTA: "Alta", URGENTE: "Urgente" } as Record<string, string>)[value] ?? value; }
-function rotuloSituacaoFila(value: string) { return ({ AGUARDANDO: "Aguardando", CHAMADO: "Chamado", EM_ATENDIMENTO: "Em atendimento", ATENDIDO: "Atendido", DESISTIU: "Não compareceu" } as Record<string, string>)[value] ?? value; }
-function rotuloSituacao(value: string) { return ({ EM_TRIAGEM: "Em triagem", EM_ATENDIMENTO: "Em atendimento", CONCLUIDO: "Concluído", ENCAMINHADO: "Encaminhado", CANCELADO: "Cancelado" } as Record<string, string>)[value] ?? value; }
-function tomDoCaso(value: string): "neutral" | "good" | "warn" | "bad" { if (value === "CONCLUIDO") return "good"; if (value === "CANCELADO") return "neutral"; if (value === "EM_ATENDIMENTO") return "warn"; return "bad"; }

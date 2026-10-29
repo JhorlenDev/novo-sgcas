@@ -7,7 +7,6 @@ import {
   ArrowRight,
   ArrowLeftRight,
   IdCard,
-  UserRound,
   CheckCircle2,
   Clock3,
   ClipboardList,
@@ -16,7 +15,6 @@ import {
   MapPin,
   Search,
   Send,
-  ShieldAlert,
   Stethoscope,
   UserPlus,
   UserRoundCheck,
@@ -30,10 +28,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Badge, Button, Card, EmptyState, Field, Input, SecondaryButton, Select } from "@/components/ui";
+import { Aba, Abas, Badge, Button, Card, EmptyState, Field, Input, PageHeader, SecondaryButton, SectionHeading, Select, Stat } from "@/components/ui";
 import { AvisoDeDuplicidade, alertasDoErro, justificativaValida, mensagemDeDuplicidade, useDuplicidade } from "@/components/duplicidade/aviso";
 import { api, mensagemDaApi } from "@/lib/api";
-import { formatarDataHora as formatarDataHoraDoEncaminhamento } from "@/lib/encaminhamentos";
+import { rotuloPrioridade, rotuloSituacao, rotuloSituacaoDaSenha, tomDaPrioridade, tomDoCaso } from "@/lib/casos";
+import { formatarDataCurta, formatarDataHora } from "@/lib/datas";
 import { formatCPF } from "@/lib/utils";
 import type {
   AlertaDeDuplicidade, AtendimentoRecepcao, Caso, CidadaoLista, EncaminhamentoResumo, EntradaHistorico,
@@ -254,54 +253,61 @@ export default function RecepcaoPage() {
 
   return (
     <AppShell>
-      <div className="mb-5">
-        <PainelResumoRecepcao painel={painel} />
+      <PageHeader
+        title="Recepção"
+        description="Busque a pessoa, confira o histórico e registre a chegada ou o encaminhamento para o atendimento."
+      />
+
+      <PainelResumoRecepcao painel={painel} />
+
+      <div className="mt-5">
+        <Abas rotulo="Seções da recepção">
+          <Aba
+            ativa={aba === "nova"}
+            onClick={() => {
+              setAba("nova");
+              window.requestAnimationFrame(() => {
+                const input = document.getElementById("busca-cidadao-recepcao");
+                input?.focus({ preventScroll: true });
+                input?.scrollIntoView({ behavior: "smooth", block: "center" });
+              });
+            }}
+          >
+            <Search size={16} aria-hidden="true" />
+            Buscar<span className="max-sm:hidden">&nbsp;cidadão</span>
+          </Aba>
+          <Aba ativa={aba === "recentes"} onClick={() => setAba("recentes")}>
+            <Clock3 size={16} aria-hidden="true" />
+            <span className="sm:hidden">Recentes</span>
+            <span className="max-sm:hidden">Atendimentos recentes</span>
+            <Badge tone="neutral">{ultimosAtendimentos.length}</Badge>
+          </Aba>
+          <Aba
+            ativa={aba === "fila"}
+            onClick={() => {
+              setAba("fila");
+              void carregarFila();
+            }}
+          >
+            <ListChecks size={16} aria-hidden="true" />
+            Fila
+            <Badge tone={fila.length ? "warn" : "neutral"}>{fila.length}</Badge>
+          </Aba>
+        </Abas>
       </div>
 
-      <div className="mb-5 flex flex-wrap gap-2 rounded-card border border-meta-divider bg-white p-2 shadow-lift">
-        <AbaButton active={aba === "nova"} onClick={() => {
-          setAba("nova");
-          window.requestAnimationFrame(() => {
-            const input = document.getElementById("busca-cidadao-recepcao");
-            input?.focus({ preventScroll: true });
-            input?.scrollIntoView({ behavior: "smooth", block: "center" });
-          });
-        }}>
-          <Search size={17} />
-          Buscar cidadão
-        </AbaButton>
-        <AbaButton active={aba === "recentes"} onClick={() => setAba("recentes")}>
-          <Clock3 size={17} />
-          Atendimentos recentes
-          <Badge tone="neutral">{ultimosAtendimentos.length}</Badge>
-        </AbaButton>
-        <AbaButton active={aba === "fila"} onClick={() => {
-          setAba("fila");
-          void carregarFila();
-        }}>
-          <ListChecks size={17} />
-          Fila
-          <Badge tone={fila.length ? "warn" : "good"}>{fila.length}</Badge>
-        </AbaButton>
-      </div>
-
-      <div className="grid gap-5">
+      <div className="grid gap-4">
         {aba === "nova" && (
           <>
-            <Card className="border-primary/25">
-              <div className="mb-4 flex items-start gap-3">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-pill bg-primary/10 text-primary"><Search size={22} /></span>
-                <div>
-                  <h2 className="!mb-1">Quem você vai atender?</h2>
-                  <p className="text-sm text-meta-slate">Primeiro, encontre o cidadão. Depois, confira o histórico e escolha como registrar a recepção.</p>
-                </div>
-              </div>
-              <label htmlFor="busca-cidadao-recepcao" className="mb-2 block text-sm font-semibold text-meta-charcoal">Buscar por nome, CPF, NIS ou e-mail</label>
-              <div className="relative mb-5">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-meta-slate" />
+            <Card>
+              <h2 className="!mb-1">Quem você vai atender?</h2>
+              <p className="mb-4 text-sm text-meta-slate">Primeiro, encontre o cidadão. Depois, confira o histórico e escolha como registrar a recepção.</p>
+              <label htmlFor="busca-cidadao-recepcao" className="mb-1.5 block text-[13px] font-semibold text-meta-charcoal">Buscar por nome, CPF, NIS ou e-mail</label>
+              <div className="relative mb-4">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-meta-slate" aria-hidden="true" />
                 <Input
                   id="busca-cidadao-recepcao"
-                  className="!h-12 pl-10"
+                  className="pl-10"
                   value={busca}
                   onChange={(event) => {
                     const value = event.target.value;
@@ -314,6 +320,7 @@ export default function RecepcaoPage() {
                     }
                   }}
                   placeholder="Nome, CPF, NIS ou e-mail"
+                  autoComplete="off"
                 />
               </div>
 
@@ -321,83 +328,83 @@ export default function RecepcaoPage() {
                 <p className="mb-4 text-sm text-meta-slate">Digite pelo menos 2 caracteres e selecione o cidadão nos resultados.</p>
               )}
 
-              {!cidadao && cidadaos.map((item) => (
-                <button type="button" className="group mb-3 flex w-full flex-col gap-3 rounded-card border border-meta-divider bg-white p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary sm:flex-row sm:items-center sm:justify-between" key={item.id} onClick={() => void selecionarCidadao(item)} aria-label={`Selecionar ${item.nome}`}>
-                  <span className="flex min-w-0 items-start gap-3">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><UserRound size={22} aria-hidden="true" /></span>
-                    <span className="min-w-0">
-                      <strong className="block break-words text-base font-semibold text-meta-charcoal">{item.nome}</strong>
-                      <DadosCidadao cidadao={item} />
-                    </span>
-                  </span>
-                  <span className="inline-flex shrink-0 items-center justify-center gap-2 self-end rounded-pill bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition-colors group-hover:bg-primary group-hover:text-white sm:self-center">
-                    Selecionar <ArrowRight size={16} aria-hidden="true" />
-                  </span>
-                </button>
-              ))}
+              {!cidadao && cidadaos.length > 0 && (
+                <ul className="grid gap-2.5">
+                  {cidadaos.map((item) => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        className="group flex w-full flex-col gap-2 rounded-lg border border-meta-divider bg-white p-3.5 text-left transition-colors hover:border-primary/40 hover:bg-meta-warm-gray sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                        onClick={() => void selecionarCidadao(item)}
+                        aria-label={`Selecionar ${item.nome}`}
+                      >
+                        <span className="min-w-0">
+                          <strong className="block text-[15px] font-semibold text-meta-charcoal">{item.nome}</strong>
+                          <DadosCidadao cidadao={item} />
+                        </span>
+                        <span className="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-primary">
+                          Selecionar <ArrowRight size={16} aria-hidden="true" />
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
 
               {!cidadao && (
-                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-meta-divider pt-4 text-sm text-meta-slate">
-                  <span>Não encontrou o cidadão?</span>
-                  <Link href="/cidadaos/novo" className="inline-flex items-center gap-1.5 font-semibold text-primary underline-offset-4 hover:underline">
-                    <UserPlus size={16} /> Cadastrar cidadão
+                <p className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-meta-divider pt-4 text-sm text-meta-slate">
+                  Não encontrou o cidadão?
+                  <Link href="/cidadaos/novo" className="inline-flex min-h-10 items-center gap-1.5 font-semibold text-primary underline-offset-4 hover:underline">
+                    <UserPlus size={16} aria-hidden="true" /> Cadastrar cidadão
                   </Link>
-                </div>
+                </p>
               )}
 
               {cidadao && <CidadaoSelecionado cidadao={cidadao} onTrocar={() => setCidadao(null)} />}
             </Card>
 
             {cidadao && (
-              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
-                <div className="grid min-w-0 gap-5">
+              // As ações vêm primeiro no código para aparecerem antes do histórico no celular;
+              // no computador elas ficam na coluna da direita.
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem] xl:items-start">
+                <Card className="h-fit xl:col-start-2 xl:row-start-1">
+                  <h2 className="!mb-0.5 !text-base">Atendimento</h2>
+                  <p className="mb-3 text-[13px] leading-5 text-meta-slate">Escolha o desfecho da recepção.</p>
+                  <div className="grid gap-2.5">
+                    {mensagem && <div className="notice" role="alert">{mensagem}</div>}
+
+                    <button
+                      type="button"
+                      className="flex items-start gap-3 rounded-lg bg-primary p-3.5 text-left text-primary-foreground transition-colors hover:bg-primary-hover"
+                      onClick={() => abrirAcao("ENCAMINHADO")}
+                    >
+                      <Send size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
+                      <span className="min-w-0">
+                        <strong className="block text-sm font-semibold">Iniciar atendimento</strong>
+                        <small className="block text-[13px] leading-5 text-primary-foreground/85">Cria o caso e gera a senha.</small>
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="flex items-start gap-3 rounded-lg border border-meta-divider bg-white p-3.5 text-left text-meta-charcoal transition-colors hover:bg-meta-soft-gray"
+                      onClick={() => abrirAcao("FINALIZADO")}
+                    >
+                      <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-meta-slate" aria-hidden="true" />
+                      <span className="min-w-0">
+                        <strong className="block text-sm font-semibold">Finalizar na recepção</strong>
+                        <small className="block text-[13px] leading-5 text-meta-slate">Registra a orientação dada no balcão.</small>
+                      </span>
+                    </button>
+                  </div>
+                </Card>
+
+                <div className="grid min-w-0 gap-4 xl:col-start-1 xl:row-start-1">
                   {pendentes.length > 0 && <EncaminhamentosAguardando encaminhamentos={pendentes} nome={cidadao.nome} />}
                   <Card className="min-w-0">
                     <PainelDoCidadao casos={casos} historico={historico} />
                   </Card>
                 </div>
-
-                <Card className="h-fit !p-4">
-                  <div className="mb-3">
-                    <h2 className="!mb-1 !text-base">Atendimento</h2>
-                    <p className="text-xs leading-5 text-meta-slate">Escolha o desfecho da recepção.</p>
-                  </div>
-                  <div className="grid gap-2.5">
-                    {mensagem && <div className="notice">{mensagem}</div>}
-
-                    <button
-                      type="button"
-                      className="rounded-2xl border border-primary/15 bg-primary/5 p-3 text-left transition-all hover:-translate-y-0.5 hover:border-primary/35 hover:bg-primary/10 hover:shadow-lift"
-                      onClick={() => abrirAcao("ENCAMINHADO")}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-pill bg-primary text-white shadow-sm">
-                          <Send size={15} />
-                        </span>
-                        <div className="min-w-0">
-                          <strong className="block text-[13px] font-semibold text-meta-charcoal">Iniciar atendimento</strong>
-                          <small className="block text-[11px] leading-4 text-meta-slate">Cria caso e senha.</small>
-                        </div>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      className="rounded-2xl border border-meta-divider bg-white p-3 text-left transition-all hover:-translate-y-0.5 hover:border-primary/25 hover:bg-meta-soft-gray"
-                      onClick={() => abrirAcao("FINALIZADO")}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-pill bg-primary/10 text-primary">
-                          <CheckCircle2 size={15} />
-                        </span>
-                        <div className="min-w-0">
-                          <strong className="block text-[13px] font-semibold text-meta-charcoal">Finalizar na recepção</strong>
-                          <small className="block text-[11px] leading-4 text-meta-slate">Registra orientação.</small>
-                        </div>
-                      </div>
-                    </button>
-                  </div>
-                </Card>
               </div>
             )}
           </>
@@ -406,7 +413,6 @@ export default function RecepcaoPage() {
         {aba === "recentes" && <UltimosAtendimentos atendimentos={ultimosAtendimentos} completo />}
 
         {aba === "fila" && <FilaSomenteLeitura fila={fila} onAtualizar={() => void carregarFila()} />}
-
       </div>
 
       <Dialog open={acaoOpen} onOpenChange={setAcaoOpen}>
@@ -454,7 +460,7 @@ export default function RecepcaoPage() {
                 >
                   {vinculaveis.map((e) => (
                     <option key={e.id} value={e.id}>
-                      Sim, de {e.unidade_origem_nome || "outra unidade"} · {e.categoria_rotulo} · urgência {e.urgencia_rotulo.toLowerCase()} ({formatarDataHoraDoEncaminhamento(e.criado_em)})
+                      Sim, de {e.unidade_origem_nome || "outra unidade"} · {e.categoria_rotulo} · urgência {e.urgencia_rotulo.toLowerCase()} ({formatarDataHora(e.criado_em)})
                     </option>
                   ))}
                   <option value="">Não, é um pedido novo</option>
@@ -463,12 +469,12 @@ export default function RecepcaoPage() {
             )}
 
             {servicoSelecionado && casosParecidos.length > 0 && alertasDeDuplicidade.length === 0 && (
-              <div className="rounded-feature border border-amber-200 bg-amber-50 p-4 text-amber-950">
-                <div className="row">
-                  <AlertTriangle size={18} />
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3.5 text-amber-950 sm:p-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={18} aria-hidden="true" className="shrink-0" />
                   <strong>Possível duplicidade</strong>
                 </div>
-                <p className="mt-2 text-sm leading-6">
+                <p className="mt-1.5 text-sm leading-6">
                   Há caso ou atendimento recente. Se for a mesma demanda, finalize na recepção.
                 </p>
               </div>
@@ -498,7 +504,7 @@ export default function RecepcaoPage() {
               </Field>
             )}
 
-            {mensagem && <div className="notice">{mensagem}</div>}
+            {mensagem && <div className="notice" role="alert">{mensagem}</div>}
           </div>
 
           <DialogFooter>
@@ -508,12 +514,12 @@ export default function RecepcaoPage() {
             <Button type="button" disabled={!servicoSelecionado || registrando || (acao === "ENCAMINHADO" && faltaJustificar)} onClick={() => void registrar(acao)}>
               {acao === "ENCAMINHADO" ? (
                 <>
-                  <Send size={18} />
+                  <Send size={16} aria-hidden="true" />
                   {registrando ? "Gerando..." : "Criar caso e gerar senha"}
                 </>
               ) : (
                 <>
-                  <CheckCircle2 size={18} />
+                  <CheckCircle2 size={16} aria-hidden="true" />
                   {registrando ? "Salvando..." : "Finalizar atendimento"}
                 </>
               )}
@@ -539,7 +545,7 @@ export default function RecepcaoPage() {
       <Dialog open={successOpen} onOpenChange={setSuccessOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{resultado?.desfecho === "ENCAMINHADO" ? "Caso enviado para fila" : "Atendimento finalizado"}</DialogTitle>
+            <DialogTitle>{resultado?.desfecho === "ENCAMINHADO" ? "Caso enviado para a fila" : "Atendimento finalizado"}</DialogTitle>
             <DialogDescription>
               {resultado?.senha
                 ? `Senha gerada: ${resultado.senha.senha}. O cidadão já aparece na fila da unidade.`
@@ -551,8 +557,8 @@ export default function RecepcaoPage() {
           </DialogHeader>
           <DialogFooter>
             {resultado?.senha && (
-              <Link href="/fila">
-                <SecondaryButton>Ver fila</SecondaryButton>
+              <Link href="/fila" className="button secondary">
+                Ver fila
               </Link>
             )}
             <Button onClick={() => setSuccessOpen(false)}>Entendi</Button>
@@ -563,104 +569,15 @@ export default function RecepcaoPage() {
   );
 }
 
-function AbaButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex min-h-11 items-center gap-2 rounded-pill px-4 py-2 text-sm font-semibold transition-all ${
-        active
-          ? "bg-primary text-primary-foreground shadow-lift"
-          : "bg-meta-soft-gray text-meta-charcoal hover:bg-meta-warm-gray"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
 function PainelResumoRecepcao({ painel }: { painel: PainelRecepcao | null }) {
   return (
-    <div className="grid grid-cols-2 gap-2 rounded-card border border-meta-divider bg-white p-2 sm:grid-cols-5" aria-label="Resumo da recepção">
-      <MiniStat
-        title="Atendidos hoje"
-        value={painel?.atendimentos_hoje ?? 0}
-        detail="Passagens registradas no balcão"
-        icon={Headset}
-        tone="primary"
-      />
-      <MiniStat
-        title="Aguardando"
-        value={painel?.aguardando_na_fila ?? 0}
-        detail="Senhas esperando chamada"
-        icon={ListChecks}
-        tone="warn"
-      />
-      <MiniStat
-        title="Em atendimento"
-        value={painel?.em_atendimento ?? 0}
-        detail="Já chamados pela equipe"
-        icon={Stethoscope}
-        tone="neutral"
-      />
-      <MiniStat
-        title="Finalizados"
-        value={painel?.finalizados_no_balcao ?? 0}
-        detail="Resolvidos na recepção"
-        icon={CheckCircle2}
-        tone="good"
-      />
-      <MiniStat
-        title="Geraram senha"
-        value={painel?.encaminhados_para_fila ?? 0}
-        detail="Encaminhados hoje"
-        icon={Send}
-        tone="bad"
-      />
-    </div>
-  );
-}
-
-function MiniStat({
-  title,
-  value,
-  detail,
-  icon: Icon,
-  tone,
-}: {
-  title: string;
-  value: number;
-  detail: string;
-  icon: React.ElementType;
-  tone: "primary" | "neutral" | "good" | "warn" | "bad";
-}) {
-  const toneClass = {
-    primary: "bg-primary/10 text-primary",
-    neutral: "bg-meta-soft-gray text-meta-charcoal",
-    good: "bg-success/10 text-success",
-    warn: "bg-warning/20 text-[#8a5a00]",
-    bad: "bg-destructive/10 text-destructive",
-  }[tone];
-
-  return (
-    <div className="min-w-0 rounded-lg bg-meta-soft-gray/60 px-3 py-3" title={detail}>
-      <div className="mb-2 flex items-center gap-2.5">
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${toneClass}`}>
-          <Icon size={20} aria-hidden="true" />
-        </span>
-        <strong className="text-3xl leading-none tabular-nums text-meta-charcoal">{value.toLocaleString("pt-BR")}</strong>
-      </div>
-      <p className="text-sm font-semibold leading-5 text-meta-slate">{title}</p>
-      <span className="sr-only">{detail}</span>
-    </div>
+    <section aria-label="Resumo da recepção" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <Stat label="Atendidos hoje" value={(painel?.atendimentos_hoje ?? 0).toLocaleString("pt-BR")} hint="Passagens registradas no balcão" icon={Headset} />
+      <Stat label="Aguardando" value={(painel?.aguardando_na_fila ?? 0).toLocaleString("pt-BR")} hint="Senhas esperando chamada" icon={ListChecks} highlight />
+      <Stat label="Em atendimento" value={(painel?.em_atendimento ?? 0).toLocaleString("pt-BR")} hint="Já chamados pela equipe" icon={Stethoscope} />
+      <Stat label="Finalizados" value={(painel?.finalizados_no_balcao ?? 0).toLocaleString("pt-BR")} hint="Resolvidos na recepção" icon={CheckCircle2} />
+      <Stat label="Geraram senha" value={(painel?.encaminhados_para_fila ?? 0).toLocaleString("pt-BR")} hint="Encaminhados hoje" icon={Send} />
+    </section>
   );
 }
 
@@ -671,20 +588,20 @@ function MiniStat({
  */
 function EncaminhamentosAguardando({ encaminhamentos, nome }: { encaminhamentos: EncaminhamentoResumo[]; nome: string }) {
   return (
-    <div role="status" className="rounded-feature border border-primary/30 bg-primary/5 p-4">
-      <div className="flex items-center gap-2 text-meta-charcoal">
-        <ArrowLeftRight size={18} aria-hidden="true" />
+    <div role="status" className="rounded-card border border-primary/30 bg-accent p-3.5 sm:p-4">
+      <div className="flex items-start gap-2 text-meta-charcoal">
+        <ArrowLeftRight size={18} aria-hidden="true" className="mt-0.5 shrink-0" />
         <strong>{nome} foi encaminhado(a) para esta unidade</strong>
       </div>
       <ul className="mt-2 grid gap-1 text-sm leading-6 text-meta-charcoal">
         {encaminhamentos.map((e) => (
           <li key={e.id}>
-            De <strong>{e.unidade_origem_nome || "outra unidade"}</strong> em {formatarDataHoraDoEncaminhamento(e.criado_em)} ·{" "}
+            De <strong>{e.unidade_origem_nome || "outra unidade"}</strong> em {formatarDataHora(e.criado_em)} ·{" "}
             {e.categoria_rotulo} · urgência {e.urgencia_rotulo.toLowerCase()}
           </li>
         ))}
       </ul>
-      <p className="mt-2 text-xs leading-5 text-meta-slate">
+      <p className="mt-2 text-[13px] leading-5 text-meta-slate">
         Ao iniciar o atendimento, vincule a visita ao encaminhamento: a ficha e a urgência seguem com a pessoa e a unidade
         de origem é avisada da chegada.
       </p>
@@ -700,22 +617,22 @@ function PainelDoCidadao({ casos, historico }: { casos: Caso[]; historico: Entra
     <div>
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h2 className="!mb-1 !text-lg">Histórico para decisão</h2>
-          <p className="text-xs leading-5 text-meta-slate">
-            Confira se já existe atendimento parecido antes de criar nova senha.
+          <h2 className="!mb-1 !text-base">Histórico para decisão</h2>
+          <p className="text-[13px] leading-5 text-meta-slate">
+            Confira se já existe atendimento parecido antes de criar uma nova senha.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge tone={casosAbertos.length ? "warn" : "good"}>
             {casosAbertos.length ? `${casosAbertos.length} caso(s) aberto(s)` : "Sem caso aberto"}
           </Badge>
-          <Badge tone={ultimoContato ? "neutral" : "good"}>
+          <Badge tone="neutral">
             {ultimoContato ? `Último contato ${formatarDataCurta(ultimoContato)}` : "Sem histórico recente"}
           </Badge>
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1fr_1.05fr]">
+      <div className="grid gap-6 xl:grid-cols-2 xl:gap-8">
         <CasosRecentes casos={casos} />
         <HistoricoAtendimentos historico={historico} />
       </div>
@@ -725,58 +642,47 @@ function PainelDoCidadao({ casos, historico }: { casos: Caso[]; historico: Entra
 
 function CasosRecentes({ casos }: { casos: Caso[] }) {
   return (
-    <div className="rounded-card border border-meta-divider bg-white p-4">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="row !justify-start">
-          <span className="flex h-9 w-9 items-center justify-center rounded-pill bg-primary/10 text-primary">
-            <ClipboardList size={17} />
-          </span>
-          <h3 className="text-sm font-semibold text-meta-charcoal">Casos recentes</h3>
-        </div>
-        <Badge tone="neutral">{casos.length}</Badge>
-      </div>
+    <div className="min-w-0">
+      <SectionHeading icon={ClipboardList} title="Casos recentes" count={casos.length} />
 
       {casos.length === 0 ? (
-        <EmptyState title="Nenhum caso recente" text="Se a demanda for nova, inicie atendimento e gere a senha." />
+        <EmptyState title="Nenhum caso recente" text="Se a demanda for nova, inicie o atendimento e gere a senha." />
       ) : (
-        <div className="space-y-2.5">
+        <ul>
           {casos.slice(0, 6).map((caso) => (
-            <article
-              className="rounded-card border border-meta-divider bg-meta-warm-gray p-3.5 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-white hover:shadow-lift"
-              key={caso.id}
-            >
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-meta-slate">Caso {caso.protocolo}</p>
-                  <strong className="mt-1 block text-sm text-meta-charcoal">{caso.servico_nome || "Serviço não informado"}</strong>
+            <li className="line-row" key={caso.id}>
+              <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
+                <div className="min-w-0">
+                  <small className="block">Caso {caso.protocolo}</small>
+                  <strong className="block">{caso.servico_nome || "Serviço não informado"}</strong>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5">
                   <Badge tone={tomDoCaso(caso.situacao)}>{rotuloSituacao(caso.situacao)}</Badge>
                   <Badge tone={tomDaPrioridade(caso.prioridade)}>{rotuloPrioridade(caso.prioridade)}</Badge>
                 </div>
               </div>
 
-              <p className="text-xs leading-5 text-meta-charcoal">{caso.descricao || "Sem observação registrada."}</p>
+              <p className="mt-1.5 line-clamp-3 text-[13px] leading-5 text-meta-charcoal">{caso.descricao || "Sem observação registrada."}</p>
 
-              <div className="mt-3 grid gap-2 text-xs text-meta-slate sm:grid-cols-2">
-                <span className="inline-flex items-center gap-2">
-                  <MapPin size={14} />
+              <p className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-meta-slate">
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin size={13} aria-hidden="true" />
                   {caso.unidade_nome}
                 </span>
-                <span className="inline-flex items-center gap-2">
-                  <Clock3 size={14} />
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock3 size={13} aria-hidden="true" />
                   Aberto em {formatarDataHora(caso.aberto_em)}
                 </span>
                 {caso.tecnico_nome && (
-                  <span className="inline-flex items-center gap-2 sm:col-span-2">
-                    <Stethoscope size={14} />
+                  <span className="inline-flex items-center gap-1.5">
+                    <Stethoscope size={13} aria-hidden="true" />
                     Em atendimento com {caso.tecnico_nome}
                   </span>
                 )}
-              </div>
-            </article>
+              </p>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );
@@ -784,59 +690,41 @@ function CasosRecentes({ casos }: { casos: Caso[] }) {
 
 function HistoricoAtendimentos({ historico }: { historico: EntradaHistorico[] }) {
   return (
-    <div className="rounded-card border border-meta-divider bg-white p-4">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="row !justify-start">
-          <span className="flex h-9 w-9 items-center justify-center rounded-pill bg-primary/10 text-primary">
-            <Clock3 size={17} />
-          </span>
-          <h3 className="text-sm font-semibold text-meta-charcoal">Histórico de atendimentos</h3>
-        </div>
-        <Badge tone="neutral">{historico.length}</Badge>
-      </div>
+    <div className="min-w-0">
+      <SectionHeading icon={Clock3} title="Histórico de atendimentos" count={historico.length} />
 
       {historico.length === 0 ? (
         <EmptyState title="Sem atendimentos recentes" text="Nada nos últimos meses que indique duplicidade." />
       ) : (
-        <div className="relative space-y-2.5 before:absolute before:left-4 before:top-2 before:h-[calc(100%-1rem)] before:w-px before:bg-meta-divider">
+        <ul>
           {historico.slice(0, 8).map((entrada, index) => (
-            <article className="relative pl-10" key={`${entrada.quando}-${index}`}>
-              <span className={`absolute left-0 top-1 flex h-8 w-8 items-center justify-center rounded-pill border-4 border-white ${
-                entrada.o_que.toLowerCase().includes("finalizado") ? "bg-success/15 text-success" : "bg-warning/20 text-[#8a5a00]"
-              }`}>
-                {entrada.o_que.toLowerCase().includes("finalizado") ? <CheckCircle2 size={15} /> : <ShieldAlert size={15} />}
-              </span>
-
-              <div className="rounded-card border border-meta-divider bg-meta-soft-gray p-3.5">
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <strong className="text-sm text-meta-charcoal">{entrada.o_que}</strong>
-                  <Badge tone={entrada.e_de_outra_unidade ? "warn" : "neutral"}>
-                    {entrada.e_de_outra_unidade ? "Outra unidade" : "Mesma unidade"}
-                  </Badge>
-                </div>
-                <p className="text-xs leading-5 text-meta-charcoal">
-                  {entrada.detalhe || "Sem observação registrada."}
-                </p>
-                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-meta-slate">
-                  <span className="inline-flex items-center gap-2">
-                    <Clock3 size={14} />
-                    {formatarDataHora(entrada.quando)}
-                  </span>
-                  <span className="inline-flex items-center gap-2">
-                    <MapPin size={14} />
-                    {entrada.unidade}
-                  </span>
-                  {entrada.quem_atendeu && (
-                    <span className="inline-flex items-center gap-2">
-                      <Stethoscope size={14} />
-                      {entrada.quem_atendeu}
-                    </span>
-                  )}
-                </div>
+            <li className="line-row" key={`${entrada.quando}-${index}`}>
+              <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
+                <strong>{entrada.o_que}</strong>
+                <Badge tone={entrada.e_de_outra_unidade ? "warn" : "neutral"}>
+                  {entrada.e_de_outra_unidade ? "Outra unidade" : "Mesma unidade"}
+                </Badge>
               </div>
-            </article>
+              <p className="mt-1 text-[13px] leading-5 text-meta-charcoal">{entrada.detalhe || "Sem observação registrada."}</p>
+              <p className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-meta-slate">
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock3 size={13} aria-hidden="true" />
+                  {formatarDataHora(entrada.quando)}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin size={13} aria-hidden="true" />
+                  {entrada.unidade}
+                </span>
+                {entrada.quem_atendeu && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Stethoscope size={13} aria-hidden="true" />
+                    {entrada.quem_atendeu}
+                  </span>
+                )}
+              </p>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );
@@ -845,53 +733,48 @@ function HistoricoAtendimentos({ historico }: { historico: EntradaHistorico[] })
 function UltimosAtendimentos({ atendimentos, completo = false }: { atendimentos: AtendimentoRecepcao[]; completo?: boolean }) {
   return (
     <Card>
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="!mb-1">{completo ? "Atendimentos recentes" : "Meus últimos atendimentos"}</h2>
-          {completo && (
-            <p className="text-sm leading-6 text-meta-slate">
-              Tudo que a recepção finalizou no balcão ou encaminhou para a fila.
-            </p>
-          )}
-        </div>
-        <Badge tone="neutral">{atendimentos.length}</Badge>
-      </div>
+      <SectionHeading title={completo ? "Atendimentos recentes" : "Meus últimos atendimentos"} count={atendimentos.length} />
+      {completo && (
+        <p className="-mt-1 mb-3 text-sm leading-6 text-meta-slate">
+          Tudo que a recepção finalizou no balcão ou encaminhou para a fila.
+        </p>
+      )}
 
       {atendimentos.length === 0 ? (
         <EmptyState title="Nenhum registro ainda" text="Quando você finalizar ou enviar alguém para a fila, aparece aqui." />
       ) : (
-        <div className="space-y-2.5">
+        <ul>
           {atendimentos.slice(0, completo ? 20 : 6).map((atendimento) => (
-            <article className="rounded-card border border-meta-divider bg-white p-3.5 shadow-lift" key={atendimento.id}>
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <strong className="text-sm text-meta-charcoal">{atendimento.cidadao_nome}</strong>
+            <li className="line-row" key={atendimento.id}>
+              <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
+                <strong>{atendimento.cidadao_nome}</strong>
                 <Badge tone={atendimento.desfecho === "ENCAMINHADO" ? "warn" : "good"}>
-                  {atendimento.desfecho === "ENCAMINHADO" ? "Enviado para fila" : "Finalizado no balcão"}
+                  {atendimento.desfecho === "ENCAMINHADO" ? "Enviado para a fila" : "Finalizado no balcão"}
                 </Badge>
               </div>
-              <p className="text-xs font-medium text-meta-charcoal">{atendimento.demanda}</p>
-              <p className="mt-1 text-xs leading-5 text-meta-slate">
+              <p className="mt-0.5 text-[13px] font-medium text-meta-charcoal">{atendimento.demanda}</p>
+              <p className="mt-0.5 text-[13px] leading-5 text-meta-slate">
                 {atendimento.observacao || atendimento.motivo || "Sem observação registrada."}
               </p>
-              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-meta-slate">
-                <span className="inline-flex items-center gap-2">
-                  <Clock3 size={14} />
+              <p className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-meta-slate">
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock3 size={13} aria-hidden="true" />
                   {formatarDataHora(atendimento.criado_em)}
                 </span>
-                <span className="inline-flex items-center gap-2">
-                  <MapPin size={14} />
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin size={13} aria-hidden="true" />
                   {atendimento.local_do_atendimento || atendimento.unidade_nome}
                 </span>
                 {atendimento.caso_protocolo && (
-                  <span className="inline-flex items-center gap-2">
-                    <ClipboardList size={14} />
+                  <span className="inline-flex items-center gap-1.5">
+                    <ClipboardList size={13} aria-hidden="true" />
                     Caso {atendimento.caso_protocolo}
                   </span>
                 )}
-              </div>
-            </article>
+              </p>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </Card>
   );
@@ -900,47 +783,40 @@ function UltimosAtendimentos({ atendimentos, completo = false }: { atendimentos:
 function FilaSomenteLeitura({ fila, onAtualizar }: { fila: Senha[]; onAtualizar: () => void }) {
   return (
     <Card>
-      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h2 className="!mb-1">Fila de atendimento</h2>
-          <p className="text-sm leading-6 text-meta-slate">
-            Consulta da recepção. Quem inicia o atendimento é o atendente na tela de fila.
-          </p>
-        </div>
-        <SecondaryButton type="button" onClick={onAtualizar}>
-          Atualizar
-        </SecondaryButton>
-      </div>
+      <SectionHeading
+        title="Fila de atendimento"
+        count={fila.length}
+        action={
+          <SecondaryButton type="button" size="sm" onClick={onAtualizar}>
+            Atualizar
+          </SecondaryButton>
+        }
+      />
+      <p className="-mt-1 mb-3 text-sm leading-6 text-meta-slate">
+        Consulta da recepção. Quem inicia o atendimento é o atendente, na tela de Atendimento.
+      </p>
 
       {fila.length === 0 ? (
         <EmptyState title="Fila vazia" text="Nenhuma senha aguardando atendimento agora." />
       ) : (
-        <div className="grid gap-3">
+        <ul>
           {fila.map((senha) => (
-            <article
-              className="rounded-feature border border-meta-divider bg-meta-warm-gray p-4 transition-all hover:bg-white hover:shadow-lift"
-              key={senha.id}
-            >
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-start gap-3">
-                  <span className="flex h-12 min-w-16 items-center justify-center rounded-feature bg-primary px-4 text-lg font-bold text-primary-foreground shadow-lift">
-                    {senha.senha}
-                  </span>
-                  <div>
-                    <strong className="block text-meta-charcoal">{senha.cidadao_nome}</strong>
-                    <p className="mt-1 text-sm text-meta-slate">{senha.servico || "Serviço não informado"}</p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <Badge tone={tomDaPrioridade(senha.prioridade)}>{rotuloPrioridade(senha.prioridade)}</Badge>
-                  <Badge tone="neutral">{rotuloSituacaoFila(senha.situacao)}</Badge>
-                  <Badge tone="neutral">{formatarDataHora(senha.criado_em)}</Badge>
-                </div>
-              </div>
-            </article>
+            <li className="line-row flex flex-wrap items-center gap-x-3 gap-y-2" key={senha.id}>
+              <span className="flex h-10 min-w-14 shrink-0 items-center justify-center rounded-lg bg-primary px-2.5 text-[15px] font-bold tabular-nums text-primary-foreground">
+                {senha.senha}
+              </span>
+              <span className="min-w-0 flex-1 basis-40">
+                <span className="block text-sm font-semibold text-meta-charcoal">{senha.cidadao_nome}</span>
+                <small className="block">{senha.servico || "Serviço não informado"}</small>
+              </span>
+              <span className="flex flex-wrap items-center gap-2">
+                <Badge tone={tomDaPrioridade(senha.prioridade)}>{rotuloPrioridade(senha.prioridade)}</Badge>
+                <Badge tone="neutral">{rotuloSituacaoDaSenha(senha.situacao)}</Badge>
+                <small className="tabular-nums">{formatarDataHora(senha.criado_em)}</small>
+              </span>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </Card>
   );
@@ -949,38 +825,32 @@ function FilaSomenteLeitura({ fila, onAtualizar }: { fila: Senha[]; onAtualizar:
 function DadosCidadao({ cidadao }: { cidadao: CidadaoLista }) {
   const local = [cidadao.bairro, cidadao.cidade].filter(Boolean).join(" · ");
   return (
-    <span className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-meta-slate">
-      <span className="inline-flex items-center gap-1.5 rounded-lg border border-meta-divider bg-meta-soft-gray/70 px-2 py-1 tabular-nums">
-        <IdCard size={16} className="shrink-0" aria-hidden="true" />
+    <span className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-meta-slate">
+      <span className="inline-flex items-center gap-1.5 tabular-nums">
+        <IdCard size={14} className="shrink-0" aria-hidden="true" />
         {cidadao.cpf ? `CPF ${formatCPF(cidadao.cpf)}` : "CPF não informado"}
       </span>
-      {local && <span className="inline-flex items-center gap-1.5"><MapPin size={16} className="shrink-0" aria-hidden="true" />{local}</span>}
+      {local && <span className="inline-flex items-center gap-1.5"><MapPin size={14} className="shrink-0" aria-hidden="true" />{local}</span>}
     </span>
   );
 }
 
 function CidadaoSelecionado({ cidadao, onTrocar }: { cidadao: CidadaoLista; onTrocar: () => void }) {
   return (
-    <div className="rounded-2xl border border-primary/15 bg-gradient-to-br from-primary/10 via-white to-meta-warm-gray px-4 py-3 shadow-sm">
+    <div className="rounded-lg border border-primary/30 bg-accent p-3.5 sm:p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary text-white shadow-lift">
-            <UserRoundCheck className="h-5 w-5" />
-          </span>
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary/75">Selecionado</p>
-            <h3 className="mt-0.5 break-words text-base font-semibold text-meta-charcoal">{cidadao.nome}</h3>
-            <DadosCidadao cidadao={cidadao} />
-          </div>
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 text-[13px] font-semibold text-primary">
+            <UserRoundCheck size={15} aria-hidden="true" />
+            Cidadão selecionado
+          </p>
+          <h3 className="mt-0.5 text-base font-semibold text-meta-charcoal">{cidadao.nome}</h3>
+          <DadosCidadao cidadao={cidadao} />
         </div>
-        <button
-          type="button"
-          className="inline-flex h-8 shrink-0 items-center justify-center rounded-pill border border-meta-divider bg-white px-3 text-xs font-semibold text-meta-charcoal shadow-sm transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
-          onClick={onTrocar}
-        >
-          <ArrowLeftRight size={14} className="mr-1.5" aria-hidden="true" />
+        <SecondaryButton type="button" size="sm" className="shrink-0 self-start sm:self-center" onClick={onTrocar}>
+          <ArrowLeftRight size={14} aria-hidden="true" />
           Trocar cidadão
-        </button>
+        </SecondaryButton>
       </div>
     </div>
   );
@@ -992,69 +862,4 @@ function normalizar(value: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
-}
-
-function formatarDataHora(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function formatarDataCurta(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function rotuloSituacao(value: string) {
-  const labels: Record<string, string> = {
-    EM_TRIAGEM: "Na fila/triagem",
-    EM_ATENDIMENTO: "Em atendimento",
-    CONCLUIDO: "Concluído",
-    ENCAMINHADO: "Encaminhado",
-    CANCELADO: "Cancelado",
-  };
-  return labels[value] ?? value;
-}
-
-function rotuloPrioridade(value: string) {
-  const labels: Record<string, string> = {
-    BAIXA: "Baixa",
-    NORMAL: "Normal",
-    ALTA: "Alta",
-    URGENTE: "Urgente",
-  };
-  return labels[value] ?? value;
-}
-
-function rotuloSituacaoFila(value: string) {
-  const labels: Record<string, string> = {
-    AGUARDANDO: "Aguardando",
-    CHAMADO: "Chamado",
-    EM_ATENDIMENTO: "Em atendimento",
-    ATENDIDO: "Atendido",
-    DESISTIU: "Desistiu",
-  };
-  return labels[value] ?? value;
-}
-
-function tomDoCaso(value: string): "neutral" | "good" | "warn" | "bad" {
-  if (value === "CONCLUIDO") return "good";
-  if (value === "CANCELADO") return "neutral";
-  if (value === "EM_ATENDIMENTO") return "warn";
-  return "bad";
-}
-
-function tomDaPrioridade(value: string): "neutral" | "good" | "warn" | "bad" {
-  if (value === "URGENTE") return "bad";
-  if (value === "ALTA") return "warn";
-  if (value === "BAIXA") return "good";
-  return "neutral";
 }

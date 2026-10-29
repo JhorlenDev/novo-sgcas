@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { Building2, Plus, Wrench } from "lucide-react";
+import { Building2, Plus, Search } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import {
   Dialog,
@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, SecondaryButton, Select } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, SecondaryButton, SectionHeading, Select } from "@/components/ui";
 import { api, mensagemDaApi } from "@/lib/api";
 import { CATEGORIA_DE_BENEFICIO, TIPOS_DE_AUXILIO } from "@/lib/auxilios";
 import { useAuth } from "@/lib/auth";
@@ -25,6 +25,10 @@ const tiposDeUnidade = [
   ["SEDE", "Sede"],
   ["OUTRO", "Outro"],
 ] as const;
+
+function rotuloDoTipoDeUnidade(tipo?: string | null) {
+  return tiposDeUnidade.find(([valor]) => valor === tipo)?.[1] ?? tipo ?? "—";
+}
 
 type Classificacao = { demandaId: string; tipo: string };
 
@@ -99,6 +103,15 @@ export default function InstitucionalPage() {
   const [modalUnidade, setModalUnidade] = useState(false);
   const [modalServico, setModalServico] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  // A rede tem dezenas de serviços: filtrar por unidade e por nome evita rolar a lista inteira.
+  const [filtroDeUnidade, setFiltroDeUnidade] = useState("");
+  const [busca, setBusca] = useState("");
+
+  const servicosVisiveis = servicos.filter((servico) => {
+    if (filtroDeUnidade && servico.unidade !== filtroDeUnidade) return false;
+    const termo = busca.trim().toLocaleLowerCase("pt-BR");
+    return !termo || servico.nome.toLocaleLowerCase("pt-BR").includes(termo);
+  });
 
   async function carregar() {
     const [units, services, coords, demands] = await Promise.all([
@@ -214,108 +227,130 @@ export default function InstitucionalPage() {
     <AppShell>
       <PageHeader
         title="Institucional"
-        description="Gerencie unidades da rede e serviços disponíveis para atendimento."
+        description="Gerencie as unidades da rede e os serviços disponíveis para atendimento."
         action={
-          <div className="row">
+          <>
             <SecondaryButton type="button" onClick={() => setModalUnidade(true)}>
-              <Building2 size={18} />
+              <Building2 size={16} aria-hidden="true" />
               Nova unidade
             </SecondaryButton>
             <Button type="button" onClick={() => setModalServico(true)} disabled={unidades.length === 0}>
-              <Plus size={18} />
+              <Plus size={16} aria-hidden="true" />
               Novo serviço
             </Button>
-          </div>
+          </>
         }
       />
 
-      {mensagem && <div className="notice mb-5">{mensagem}</div>}
+      {mensagem && <div className="notice mb-4" role="status">{mensagem}</div>}
 
-      <div className="grid two">
+      <div className="grid gap-4">
         <Card>
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="!mb-0">Unidades</h2>
-            <Badge tone="neutral">{unidades.length} cadastradas</Badge>
-          </div>
+          <SectionHeading title="Unidades" count={unidades.length} />
 
           {unidades.length === 0 ? (
             <EmptyState title="Nenhuma unidade" text="Cadastre a primeira unidade para vincular serviços e operadores." />
           ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>Tipo</th>
-                  <th>Sigla</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {unidades.map((unidade) => (
-                  <tr key={unidade.id}>
-                    <td>
-                      <strong>{unidade.nome}</strong>
-                      {unidade.coordenacao && <small className="block text-meta-slate">{unidade.coordenacao}</small>}
-                    </td>
-                    <td>{unidade.tipo ?? "-"}</td>
-                    <td>{unidade.sigla ?? "-"}</td>
-                    <td>
-                      <Badge tone={unidade.ativa === false ? "bad" : "good"}>
-                        {unidade.ativa === false ? "Inativa" : "Ativa"}
-                      </Badge>
-                    </td>
+            <div className="table-wrap">
+              <table className="table table-stack">
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Tipo</th>
+                    <th>Sigla</th>
+                    <th>Situação</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {unidades.map((unidade) => (
+                    <tr key={unidade.id}>
+                      <td data-label="Nome">
+                        <strong>{unidade.nome}</strong>
+                        {unidade.coordenacao && <small className="block text-meta-slate">{unidade.coordenacao}</small>}
+                      </td>
+                      <td data-label="Tipo">{rotuloDoTipoDeUnidade(unidade.tipo)}</td>
+                      <td data-label="Sigla">{unidade.sigla ?? "—"}</td>
+                      <td data-label="Situação">
+                        <Badge tone={unidade.ativa === false ? "bad" : "good"}>
+                          {unidade.ativa === false ? "Inativa" : "Ativa"}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </Card>
 
         <Card>
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="!mb-0">Serviços</h2>
-            <Badge tone="neutral">{servicos.length} ativos</Badge>
-          </div>
+          <SectionHeading
+            title="Serviços"
+            count={servicosVisiveis.length === servicos.length ? `${servicos.length} ativos` : `${servicosVisiveis.length} de ${servicos.length}`}
+          />
+
+          {servicos.length > 0 && (
+            <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:max-w-2xl">
+              <Field label="Unidade">
+                <Select value={filtroDeUnidade} onChange={(event) => setFiltroDeUnidade(event.target.value)}>
+                  <option value="">Todas as unidades</option>
+                  {unidades.map((unidade) => (
+                    <option key={unidade.id} value={unidade.id}>{unidade.nome}</option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Buscar serviço">
+                <span className="relative block">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-meta-slate" aria-hidden="true" />
+                  <Input className="pl-9" type="search" value={busca} onChange={(event) => setBusca(event.target.value)} placeholder="Nome do serviço" />
+                </span>
+              </Field>
+            </div>
+          )}
 
           {servicos.length === 0 ? (
             <EmptyState title="Nenhum serviço" text="Cadastre os serviços que aparecem na recepção e no encaminhamento." />
+          ) : servicosVisiveis.length === 0 ? (
+            <EmptyState title="Nenhum serviço encontrado" text="Mude a unidade ou o termo da busca." />
           ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Serviço</th>
-                  <th>Unidade</th>
-                  <th>Categoria</th>
-                  <th aria-label="Ações" />
-                </tr>
-              </thead>
-              <tbody>
-                {servicos.map((servico) => (
-                  <tr key={servico.id}>
-                    <td>
-                      <strong>{servico.nome}</strong>
-                      {servico.descricao && <small className="block text-meta-slate">{servico.descricao}</small>}
-                    </td>
-                    <td>{servico.unidade_nome}</td>
-                    <td>
-                      {servico.demanda_nome ?? "Sem categoria"}
-                      {servico.demanda_nome === CATEGORIA_DE_BENEFICIO && (
-                        <small className="block text-meta-slate">
-                          {servico.tipo_de_beneficio_rotulo ?? "Tipo de auxílio não informado"}
-                        </small>
-                      )}
-                    </td>
-                    <td>
-                      {podeClassificar(servico) && (
-                        <SecondaryButton type="button" className="h-9 px-3 text-xs" onClick={() => abrirClassificacao(servico)}>
-                          Classificar
-                        </SecondaryButton>
-                      )}
-                    </td>
+            <div className="table-wrap">
+              <table className="table table-stack">
+                <thead>
+                  <tr>
+                    <th>Serviço</th>
+                    <th>Unidade</th>
+                    <th>Categoria</th>
+                    <th><span className="sr-only">Ações</span></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {servicosVisiveis.map((servico) => (
+                    <tr key={servico.id}>
+                      <td data-label="Serviço">
+                        <strong>{servico.nome}</strong>
+                        {servico.descricao && <small className="mt-0.5 block text-meta-slate">{servico.descricao}</small>}
+                      </td>
+                      <td data-label="Unidade">{servico.unidade_nome}</td>
+                      <td data-label="Categoria">
+                        {servico.demanda_nome ?? <span className="text-meta-slate">Sem categoria</span>}
+                        {servico.demanda_nome === CATEGORIA_DE_BENEFICIO && (
+                          <small className="block text-meta-slate">
+                            {servico.tipo_de_beneficio_rotulo ?? "Tipo de auxílio não informado"}
+                          </small>
+                        )}
+                      </td>
+                      <td className="md:w-px md:whitespace-nowrap md:text-right">
+                        {podeClassificar(servico) && (
+                          <SecondaryButton type="button" size="sm" onClick={() => abrirClassificacao(servico)}>
+                            Classificar
+                          </SecondaryButton>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </Card>
       </div>
@@ -387,7 +422,7 @@ export default function InstitucionalPage() {
 
           <form className="grid gap-4" onSubmit={criarServico}>
             <Field label="Nome do serviço">
-              <Input name="nome" placeholder="Benefício eventual" required />
+              <Input name="nome" placeholder="Ex.: Cesta básica" required />
             </Field>
             <Field label="Unidade">
               <Select name="unidade_id" required>
@@ -406,10 +441,7 @@ export default function InstitucionalPage() {
               <SecondaryButton type="button" onClick={() => setModalServico(false)} disabled={salvando}>
                 Cancelar
               </SecondaryButton>
-              <Button disabled={salvando}>
-                <Wrench size={18} />
-                {salvando ? "Salvando..." : "Cadastrar serviço"}
-              </Button>
+              <Button disabled={salvando}>{salvando ? "Salvando..." : "Cadastrar serviço"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

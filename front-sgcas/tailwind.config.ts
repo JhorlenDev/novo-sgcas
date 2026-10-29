@@ -11,8 +11,11 @@ const config: Config = {
       screens: { '2xl': '1440px' },
     },
     extend: {
+      // Telas pequenas de verdade (celular em pé) precisam de um ponto próprio:
+      // entre 320 e 640 px a diferença de 100 px muda como a linha quebra.
+      screens: { xs: '480px' },
       fontFamily: {
-        sans: ['var(--font-nunito)', 'Nunito', 'Noto Sans', 'Helvetica', 'Arial', 'sans-serif'],
+        sans: ['var(--font-public-sans)', 'Public Sans', 'Noto Sans', 'Helvetica', 'Arial', 'sans-serif'],
       },
       colors: {
         border: 'hsl(var(--border))',
@@ -58,32 +61,33 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
-        // Meta Store palette (direct access)
+        // Paleta do sistema: azul institucional, texto em grafite e cinzas frios.
+        // (o prefixo `meta` é herdado; os valores abaixo são os que valem)
         meta: {
-          blue: '#0064E0',
-          'blue-hover': '#0143B5',
-          'blue-pressed': '#004BB9',
-          'blue-light': '#47A5FA',
+          blue: '#155399',
+          'blue-hover': '#0F4178',
+          'blue-pressed': '#0B3260',
+          'blue-light': '#4E8AD0',
           charcoal: '#1C2B33',
-          slate: '#5D6C7B',
-          divider: '#DEE3E9',
-          'soft-gray': '#F1F4F7',
-          'warm-gray': '#F7F8FA',
-          'baby-blue': '#E8F3FF',
+          slate: '#56677A',
+          divider: '#DCE2E9',
+          'soft-gray': '#EFF2F6',
+          'warm-gray': '#F6F7F9',
+          'baby-blue': '#E9F0F9',
           'near-black': '#1C1E21',
         },
       },
+      // Cantos discretos: a interface é de trabalho, não de vitrine.
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
         card: 'var(--radius-card)',
         feature: 'var(--radius-feature)',
-        pill: '100px',
       },
       boxShadow: {
-        elevated: '0 12px 28px 0 rgba(0,0,0,0.12), 0 2px 4px 0 rgba(0,0,0,0.08)',
-        lift: '0 2px 4px 0 rgba(0,0,0,0.08)',
+        elevated: '0 16px 40px -8px rgba(16,24,40,0.22), 0 2px 6px 0 rgba(16,24,40,0.08)',
+        lift: '0 1px 2px 0 rgba(16,24,40,0.06)',
       },
     },
   },

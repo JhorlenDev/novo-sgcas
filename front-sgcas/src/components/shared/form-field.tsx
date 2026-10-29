@@ -36,14 +36,16 @@ export function FormField({
   children: ReactNode;
 }) {
   return (
-    <div className="space-y-2">
-      <label className="block space-y-2">
-        <span className="block text-sm font-medium leading-none tracking-tight text-meta-charcoal">
-          {label}
-        </span>
+    <div className="space-y-1.5">
+      <label className="block space-y-1.5">
+        <span className="block text-[13px] font-semibold leading-5 text-meta-charcoal">{label}</span>
         {children}
       </label>
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? (
+        <p className="field-error" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

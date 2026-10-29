@@ -2,10 +2,11 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import { Download, ExternalLink, FileArchive, FileText, Plus, Trash2 } from "lucide-react";
-import { Badge, Button, Card, EmptyState, Field, SecondaryButton, Select } from "@/components/ui";
+import { Button, Card, EmptyState, Field, SecondaryButton, SectionHeading, Select } from "@/components/ui";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { ApiError, api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { formatarDataHora } from "@/lib/datas";
 import type { Anexo, TipoDeAnexo } from "@/types/sgcas";
 
 // Os mesmos 25 MB da API (api-sgcas/apps/cidadaos/anexos.py): conferir aqui evita
@@ -87,20 +88,20 @@ export function AnexosPanel({ cidadaoId, anexos, tipos, onChanged }: Props) {
 
   return (
     <Card>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="row !justify-start">
-          <span className="flex h-9 w-9 items-center justify-center rounded-pill bg-primary/10 text-primary"><FileArchive size={17} /></span>
-          <h2 className="!mb-0 !text-lg">Documentos anexados</h2>
-          <Badge tone="neutral">{anexos.length}</Badge>
-        </div>
-        <SecondaryButton type="button" className="h-9 px-3 text-xs" onClick={() => (aberto ? fechar() : setAberto(true))} aria-expanded={aberto}>
-          <Plus size={14} />
-          Enviar documento
-        </SecondaryButton>
-      </div>
+      <SectionHeading
+        icon={FileArchive}
+        title="Documentos anexados"
+        count={anexos.length}
+        action={
+          <SecondaryButton type="button" size="sm" onClick={() => (aberto ? fechar() : setAberto(true))} aria-expanded={aberto}>
+            <Plus size={14} aria-hidden="true" />
+            Enviar documento
+          </SecondaryButton>
+        }
+      />
 
       {aberto && (
-        <form className="mb-4 rounded-card border border-primary/15 bg-primary/5 p-3" onSubmit={enviar}>
+        <form className="mb-4 rounded-lg border border-meta-divider bg-meta-warm-gray p-3 sm:p-4" onSubmit={enviar}>
           <div className="grid gap-3 md:grid-cols-2">
             <Field label="Tipo de documento">
               <Select value={tipo} onChange={(event) => setTipo(event.target.value)} required>
@@ -109,51 +110,51 @@ export function AnexosPanel({ cidadaoId, anexos, tipos, onChanged }: Props) {
               </Select>
             </Field>
             <Field label="Arquivo">
-              <input ref={arquivoRef} className="input" type="file" accept={FORMATOS_ACEITOS} required />
+              <input ref={arquivoRef} className="input file:mr-3 file:rounded-md file:border-0 file:bg-meta-soft-gray file:px-3 file:py-1.5 file:text-sm file:font-semibold" type="file" accept={FORMATOS_ACEITOS} required />
             </Field>
           </div>
           <p className="mt-2 text-xs leading-5 text-meta-slate">
             PDF, JPG, PNG ou WEBP, até 25 MB. As fotos são reduzidas e perdem os dados de localização.
           </p>
-          {erro && <p className="mt-2 text-xs font-semibold text-danger" role="alert">{erro}</p>}
+          {erro && <p className="field-error mt-2" role="alert">{erro}</p>}
           <div className="mt-3 flex justify-end gap-2">
-            <SecondaryButton type="button" className="h-9 px-3 text-xs" onClick={fechar} disabled={enviando}>Cancelar</SecondaryButton>
-            <Button type="submit" className="h-9 px-3 text-xs" disabled={enviando}>{enviando ? "Enviando..." : "Enviar"}</Button>
+            <SecondaryButton type="button" size="sm" onClick={fechar} disabled={enviando}>Cancelar</SecondaryButton>
+            <Button type="submit" size="sm" disabled={enviando}>{enviando ? "Enviando..." : "Enviar"}</Button>
           </div>
         </form>
       )}
 
-      {!aberto && erro && <p className="mb-3 text-xs font-semibold text-danger" role="alert">{erro}</p>}
-      {aviso && <p className="mb-3 text-xs font-semibold text-success" role="status">{aviso}</p>}
+      {!aberto && erro && <p className="field-error mb-3" role="alert">{erro}</p>}
+      {aviso && <p className="mb-3 text-xs font-semibold text-emerald-800" role="status">{aviso}</p>}
 
       {anexos.length === 0 ? (
         <EmptyState title="Sem registros" text="Documentos enviados ao prontuário aparecem aqui." />
       ) : (
-        <ul className="grid gap-2" aria-label="Documentos anexados">
+        <ul aria-label="Documentos anexados">
           {anexos.map((anexo) => {
             const rotulo = rotulos.get(anexo.tipo_documento) ?? anexo.tipo_documento;
             const url = `/api/citizens/${cidadaoId}/anexos/${anexo.id}`;
             return (
-              <li key={anexo.id} className="flex items-center gap-3 rounded-card border border-meta-divider bg-meta-warm-gray p-3">
+              <li key={anexo.id} className="line-row flex flex-wrap items-center gap-x-3 gap-y-2">
                 <Miniatura url={url} imagem={anexo.mime.startsWith("image/")} descricao={rotulo} />
                 <div className="min-w-0 flex-1">
-                  <strong className="block truncate text-sm text-meta-charcoal">{rotulo}</strong>
+                  <strong className="block text-sm text-meta-charcoal">{rotulo}</strong>
                   <p className="mt-0.5 text-xs leading-5 text-meta-slate">
                     {[anexo.mime === "application/pdf" ? "PDF" : "Imagem", formatarTamanho(anexo.tamanho), anexo.enviado_em ? formatarDataHora(anexo.enviado_em) : null]
                       .filter(Boolean)
                       .join(" · ")}
                   </p>
                 </div>
-                <div className="flex shrink-0 gap-1.5">
-                  <a className="button secondary h-9 px-2.5 text-xs" href={url} target="_blank" rel="noopener noreferrer" aria-label={`Abrir ${rotulo}`} title="Abrir">
-                    <ExternalLink size={14} />
+                <div className="flex shrink-0 gap-1.5 max-xs:w-full">
+                  <a className="button secondary sm !px-2.5" href={url} target="_blank" rel="noopener noreferrer" aria-label={`Abrir ${rotulo}`} title="Abrir">
+                    <ExternalLink size={14} aria-hidden="true" />
                   </a>
-                  <a className="button secondary h-9 px-2.5 text-xs" href={url} download aria-label={`Baixar ${rotulo}`} title="Baixar">
-                    <Download size={14} />
+                  <a className="button secondary sm !px-2.5" href={url} download aria-label={`Baixar ${rotulo}`} title="Baixar">
+                    <Download size={14} aria-hidden="true" />
                   </a>
                   {podeRemover && (
-                    <button type="button" className="button danger h-9 px-2.5 text-xs" onClick={() => setARemover(anexo)} aria-label={`Remover ${rotulo}`} title="Remover">
-                      <Trash2 size={14} />
+                    <button type="button" className="button danger sm !px-2.5" onClick={() => setARemover(anexo)} aria-label={`Remover ${rotulo}`} title="Remover">
+                      <Trash2 size={14} aria-hidden="true" />
                     </button>
                   )}
                 </div>
@@ -187,13 +188,13 @@ function Miniatura({ url, imagem, descricao }: { url: string; imagem: boolean; d
         src={`${url}?miniatura=true`}
         alt={`Miniatura: ${descricao}`}
         loading="lazy"
-        className="h-14 w-14 shrink-0 rounded-card border border-meta-divider bg-white object-cover"
+        className="h-14 w-14 shrink-0 rounded-lg border border-meta-divider bg-white object-cover"
         onError={() => setFalhou(true)}
       />
     );
   }
   return (
-    <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-card border border-meta-divider bg-white text-meta-slate" aria-hidden="true">
+    <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-meta-divider bg-meta-warm-gray text-meta-slate" aria-hidden="true">
       <FileText size={22} />
     </span>
   );
@@ -220,8 +221,4 @@ function formatarTamanho(bytes: number) {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MB`;
   if (bytes >= 1024) return `${Math.round(bytes / 1024).toLocaleString("pt-BR")} KB`;
   return `${bytes} B`;
-}
-
-function formatarDataHora(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }

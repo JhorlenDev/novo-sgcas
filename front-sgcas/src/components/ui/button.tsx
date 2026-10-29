@@ -4,28 +4,24 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center whitespace-nowrap rounded-pill text-sm font-medium tracking-tight ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed [&_svg]:shrink-0',
   {
     variants: {
       variant: {
         default:
-          'bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-pressed active:scale-[0.97] disabled:bg-meta-divider disabled:text-meta-slate/60',
-        destructive:
-          'bg-destructive text-destructive-foreground hover:bg-destructive/90 active:scale-[0.97]',
-        outline:
-          'border-2 border-meta-charcoal/10 bg-transparent text-meta-charcoal hover:bg-meta-charcoal/5 hover:border-meta-charcoal/20',
-        secondary:
-          'bg-meta-soft-gray text-meta-charcoal hover:bg-meta-divider active:scale-[0.97]',
-        ghost:
-          'text-meta-charcoal hover:bg-meta-soft-gray',
-        link:
-          'rounded-none text-primary underline-offset-4 hover:underline px-0',
+          'bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-pressed disabled:bg-meta-divider disabled:text-meta-slate/70',
+        destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+        outline: 'border border-meta-divider bg-white text-meta-charcoal hover:bg-meta-soft-gray',
+        secondary: 'border border-meta-divider bg-white text-meta-charcoal hover:bg-meta-soft-gray',
+        ghost: 'text-meta-charcoal hover:bg-meta-soft-gray',
+        link: 'rounded-none px-0 text-primary underline-offset-4 hover:underline',
       },
+      // Alvos de toque de 44 px no celular; mais compactos com mouse.
       size: {
-        default: 'h-10 px-[22px] py-[10px]',
-        sm: 'h-9 px-4 text-xs',
-        lg: 'h-12 px-7 text-[15px]',
-        icon: 'h-10 w-10 rounded-full',
+        default: 'min-h-11 px-4 py-2 md:min-h-10',
+        sm: 'min-h-10 px-3 py-1.5 text-[13px] md:min-h-9',
+        lg: 'min-h-12 px-6 text-[15px]',
+        icon: 'h-11 w-11 md:h-10 md:w-10',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },

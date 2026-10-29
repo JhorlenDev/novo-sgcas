@@ -2,34 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, ClipboardList, FolderOpen, Headset, Send, Stethoscope, Users, XCircle } from "lucide-react";
+import { ConciergeBell, FolderOpen, Users } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { Button, Card, EmptyState, PageHeader } from "@/components/ui";
+import { Badge, Card, EmptyState, PageHeader, SectionHeading, Stat } from "@/components/ui";
 import { api } from "@/lib/api";
+import { rotuloSituacao, tomDoCaso } from "@/lib/casos";
 import type { Caso, Senha } from "@/types/sgcas";
-
-const situacoesDosCasos: Record<string, { label: string; icon: typeof CheckCircle2; className: string }> = {
-  EM_TRIAGEM: { label: "Em triagem", icon: ClipboardList, className: "border-blue-200 bg-blue-50 !text-blue-800" },
-  EM_ATENDIMENTO: { label: "Em atendimento", icon: Stethoscope, className: "border-amber-200 bg-amber-50 !text-amber-800" },
-  CONCLUIDO: { label: "Concluído", icon: CheckCircle2, className: "border-green-200 bg-green-50 !text-green-800" },
-  ENCAMINHADO: { label: "Encaminhado", icon: Send, className: "border-violet-200 bg-violet-50 !text-violet-800" },
-  CANCELADO: { label: "Cancelado", icon: XCircle, className: "border-red-200 bg-red-50 !text-red-800" },
-};
-
-function SituacaoDoCaso({ value }: { value: string }) {
-  const situacao = situacoesDosCasos[value] ?? {
-    label: value.replaceAll("_", " ").toLocaleLowerCase("pt-BR"),
-    icon: FolderOpen,
-    className: "border-slate-200 bg-slate-50 !text-slate-700",
-  };
-  const Icon = situacao.icon;
-  return (
-    <small className={`inline-flex shrink-0 items-center gap-1.5 rounded-pill border px-3 py-1 font-medium ${situacao.className}`}>
-      <Icon size={14} aria-hidden="true" />
-      {situacao.label}
-    </small>
-  );
-}
 
 export default function DashboardPage() {
   const [fila, setFila] = useState<Senha[]>([]);
@@ -44,75 +22,77 @@ export default function DashboardPage() {
 
   return (
     <AppShell>
-      <PageHeader title="Painel" description="Resumo operacional da unidade para comecar o atendimento." />
-
-      <div className="grid three dashboard-stats">
-        <StatCard title="Na fila" value={fila.length} icon={Users} hero />
-        <StatCard title="Casos em acompanhamento" value={casos.length} icon={FolderOpen} />
-        <Card className="stat action-stat">
-          <span>Atalho rapido</span>
-          <Headset size={28} />
-          <Link href="/recepcao">
-            <Button>Registrar recepcao</Button>
+      <PageHeader
+        title="Painel"
+        description="O que está em andamento hoje na sua unidade."
+        action={
+          <Link href="/recepcao" className="button">
+            <ConciergeBell size={16} aria-hidden="true" />
+            Registrar recepção
           </Link>
-        </Card>
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Stat
+          label="Aguardando atendimento"
+          value={fila.length.toLocaleString("pt-BR")}
+          hint="Senhas na fila, esperando chamada."
+          icon={Users}
+          highlight
+        />
+        <Stat
+          label="Casos em acompanhamento"
+          value={casos.length.toLocaleString("pt-BR")}
+          hint="Casos visíveis para a sua unidade."
+          icon={FolderOpen}
+        />
       </div>
 
-      <div style={{ height: 16 }} />
-
-      <div className="grid two dashboard-lists">
+      <div className="grid two mt-4">
         <Card>
-          <h2>Fila de atendimento</h2>
+          <SectionHeading
+            title="Fila de atendimento"
+            action={fila.length > 0 ? <Link href="/fila" className="inline-flex min-h-10 items-center text-sm font-semibold text-primary hover:underline">Abrir fila</Link> : undefined}
+          />
           {fila.length === 0 ? (
-            <EmptyState title="Fila vazia" text="Quando a recepcao encaminhar alguem, a senha aparece aqui." />
+            <EmptyState title="Fila vazia" text="Quando a recepção encaminhar alguém, a senha aparece aqui." />
           ) : (
-            fila.slice(0, 6).map((senha) => (
-              <div className="row line-row" key={senha.id}>
-                <span>{senha.senha} - {senha.cidadao_nome}</span>
-                <small>{senha.servico}</small>
-              </div>
-            ))
+            <ul>
+              {fila.slice(0, 6).map((senha) => (
+                <li className="line-row flex items-start gap-3" key={senha.id}>
+                  <span className="mt-0.5 shrink-0 rounded-md bg-meta-soft-gray px-2 py-0.5 text-xs font-semibold tabular-nums text-meta-charcoal">
+                    {senha.senha}
+                  </span>
+                  <span className="min-w-0">
+                    <strong className="block">{senha.cidadao_nome}</strong>
+                    <small className="block">{senha.servico}</small>
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
         </Card>
+
         <Card>
-          <h2>Casos recentes</h2>
+          <SectionHeading
+            title="Casos recentes"
+            action={casos.length > 0 ? <Link href="/casos" className="inline-flex min-h-10 items-center text-sm font-semibold text-primary hover:underline">Ver todos</Link> : undefined}
+          />
           {casos.length === 0 ? (
             <EmptyState title="Sem casos" text="Os atendimentos encaminhados aparecem nesta lista." />
           ) : (
-            casos.slice(0, 6).map((caso) => (
-              <div className="line-row flex flex-wrap items-center justify-between gap-x-4 gap-y-2" key={caso.id}>
-                <span className="min-w-0 break-words">{caso.cidadao_nome}</span>
-                <SituacaoDoCaso value={caso.situacao} />
-              </div>
-            ))
+            <ul>
+              {casos.slice(0, 6).map((caso) => (
+                <li className="line-row flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5" key={caso.id}>
+                  <span className="min-w-0 text-sm font-medium">{caso.cidadao_nome}</span>
+                  <Badge tone={tomDoCaso(caso.situacao)}>{rotuloSituacao(caso.situacao)}</Badge>
+                </li>
+              ))}
+            </ul>
           )}
         </Card>
       </div>
     </AppShell>
-  );
-}
-
-function StatCard({
-  title,
-  value,
-  icon: Icon,
-  hero = false,
-}: {
-  title: string;
-  value: number;
-  icon: React.ElementType;
-  hero?: boolean;
-}) {
-  return (
-    <Card className={`stat ${hero ? "hero-stat" : ""}`}>
-      <div className="stat-head">
-        <span>{title}</span>
-        <div className="stat-icon">
-          <Icon size={21} />
-        </div>
-      </div>
-      <strong>{value.toLocaleString("pt-BR")}</strong>
-      <small>{hero ? "Atendimentos aguardando chamada." : "Casos visiveis para sua unidade."}</small>
-    </Card>
   );
 }

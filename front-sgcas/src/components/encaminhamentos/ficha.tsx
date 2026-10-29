@@ -32,12 +32,12 @@ export function CabecalhoDoEncaminhamento({ encaminhamento: e }: { encaminhament
         <ArrowRight size={14} aria-hidden="true" className="text-meta-slate" />
         <span>{destinoDoEncaminhamento(e)}</span>
       </p>
-      <p className="text-xs text-meta-slate">
+      <p className="text-[13px] text-meta-slate">
         Encaminhado em {formatarDataHora(e.criado_em)}
         {e.chegou_em ? ` · chegou em ${formatarDataHora(e.chegou_em)}` : ""}
       </p>
       {e.prazo && (
-        <p className="flex items-center gap-1.5 text-xs text-meta-slate">
+        <p className="flex items-center gap-1.5 text-[13px] text-meta-slate">
           <CalendarClock size={14} aria-hidden="true" />
           Prazo: {formatarDiaDoPrazo(e.prazo)}
         </p>
@@ -48,8 +48,8 @@ export function CabecalhoDoEncaminhamento({ encaminhamento: e }: { encaminhament
 
 function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
   return (
-    <section className="rounded-card border border-meta-divider bg-white p-4">
-      <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-meta-slate">{titulo}</h4>
+    <section className="rounded-lg border border-meta-divider bg-white p-3.5 sm:p-4">
+      <h4 className="mb-1.5 text-[13px] font-semibold text-meta-slate">{titulo}</h4>
       <div className="text-sm leading-6 text-meta-charcoal">{children}</div>
     </section>
   );

@@ -1,6 +1,9 @@
 import type { CategoriaDoMotivo, SituacaoDoEncaminhamento, TipoDeAviso, Urgencia } from "@/types/sgcas";
+import type { Tom } from "@/lib/tom";
 
-export type Tom = "neutral" | "good" | "warn" | "bad";
+export type { Tom };
+// Os formatadores de data moram em `datas`; seguem exportados daqui para quem já os importa.
+export { formatarDataHora, formatarDiaDoPrazo, hojeNoFormatoDoInput } from "@/lib/datas";
 
 // A mesma lista que a API valida (Encaminhamento.Categoria): uma palavra que diz
 // por que a pessoa segue para outro lugar. É o que a recepção do destino lê.
@@ -52,28 +55,6 @@ const AVISOS_QUE_PEDEM_ATENCAO: ReadonlySet<TipoDeAviso> = new Set([
 
 export function avisoPedeAtencao(tipo: TipoDeAviso): boolean {
   return AVISOS_QUE_PEDEM_ATENCAO.has(tipo);
-}
-
-export function formatarDataHora(valor: string): string {
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
-  }).format(new Date(valor));
-}
-
-/**
- * Uma data sem hora (o prazo) chega como "2026-11-05". `new Date()` a leria como
- * meia-noite UTC e, no fuso do município, mostraria o dia anterior.
- */
-export function formatarDiaDoPrazo(valor: string): string {
-  const [ano, mes, dia] = valor.slice(0, 10).split("-");
-  return `${dia}/${mes}/${ano}`;
-}
-
-export function hojeNoFormatoDoInput(): string {
-  const agora = new Date();
-  const mes = String(agora.getMonth() + 1).padStart(2, "0");
-  const dia = String(agora.getDate()).padStart(2, "0");
-  return `${agora.getFullYear()}-${mes}-${dia}`;
 }
 
 // O mínimo que a API exige de uma justificativa de repetição (duplicidade.py).

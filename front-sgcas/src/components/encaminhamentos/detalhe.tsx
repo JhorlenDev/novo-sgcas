@@ -95,7 +95,7 @@ export function DetalheDoEncaminhamento({
 
   return (
     <Dialog open={id !== null} onOpenChange={(aberto) => { if (!aberto) fechar(); }}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>{dados ? dados.cidadao_nome : "Encaminhamento"}</DialogTitle>
           <DialogDescription>
@@ -114,7 +114,7 @@ export function DetalheDoEncaminhamento({
             {completo ? (
               <FichaCompleta encaminhamento={completo} ficha={completo.ficha} />
             ) : (
-              <div className="flex items-start gap-2 rounded-card border border-meta-divider bg-meta-soft-gray p-3 text-sm text-meta-slate">
+              <div className="flex items-start gap-2 rounded-lg border border-meta-divider bg-meta-warm-gray p-3 text-sm leading-6 text-meta-slate">
                 <ShieldAlert size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
                 <span>
                   A recepção vê de onde a pessoa veio, quando e a categoria do motivo. O relato e a ficha são lidos
@@ -138,7 +138,7 @@ export function DetalheDoEncaminhamento({
             )}
 
             {acao && (
-              <div className="grid gap-3 rounded-card border border-primary/20 bg-primary/5 p-4">
+              <div className="grid gap-3 rounded-lg border border-meta-divider bg-meta-warm-gray p-3 sm:p-4">
                 <Field
                   label={
                     acao === "aceitar" ? "Observação, opcional"
@@ -157,8 +157,8 @@ export function DetalheDoEncaminhamento({
                     }
                   />
                 </Field>
-                {erroDaAcao && <p role="alert" className="text-sm font-semibold text-danger">{erroDaAcao}</p>}
-                <div className="flex justify-end gap-2">
+                {erroDaAcao && <p role="alert" className="field-error">{erroDaAcao}</p>}
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                   <SecondaryButton type="button" onClick={() => escolher(null)} disabled={enviando}>Voltar</SecondaryButton>
                   <Button type="button" onClick={() => void enviar()} disabled={enviando}>
                     {enviando ? "Enviando..." : acao === "aceitar" ? "Aceitar encaminhamento" : acao === "recusar" ? "Recusar encaminhamento" : "Registrar retorno"}
@@ -171,17 +171,17 @@ export function DetalheDoEncaminhamento({
 
         <DialogFooter>
           {dados && tecnico && (
-            <Link href={`/cidadaos/${dados.cidadao}`} className="mr-auto inline-flex items-center gap-1.5 text-sm font-semibold text-primary underline-offset-4 hover:underline">
+            <Link href={`/cidadaos/${dados.cidadao}`} className="inline-flex min-h-10 items-center gap-1.5 text-sm font-semibold text-primary underline-offset-4 hover:underline sm:mr-auto">
               <ExternalLink size={14} aria-hidden="true" /> Abrir prontuário
             </Link>
           )}
           {!acao && podeAceitarOuRecusar && (
             <>
               <SecondaryButton type="button" onClick={() => escolher("recusar")}>
-                <XCircle size={16} /> Recusar
+                <XCircle size={16} aria-hidden="true" /> Recusar
               </SecondaryButton>
               <Button type="button" onClick={() => escolher("aceitar")}>
-                <CheckCircle2 size={16} /> Aceitar
+                <CheckCircle2 size={16} aria-hidden="true" /> Aceitar
               </Button>
             </>
           )}
