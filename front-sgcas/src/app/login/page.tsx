@@ -3,9 +3,12 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, ArrowLeftRight, ConciergeBell, FolderOpen, Loader2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock3, Loader2, LockKeyhole, ShieldCheck } from "lucide-react";
 import { loginWithTefeCidadao } from "@/lib/api";
 import { defaultRouteForRole, useAuth } from "@/lib/auth";
+
+// A tela de entrada usa a paleta do seu desenho (índigo #2c37e2 e os cinzas originais) com
+// valores fixos, e não as cores do tema: assim ela não muda quando o tema do sistema mudar.
 
 const errors: Record<string, { title: string; text: string }> = {
   "sem-acesso": {
@@ -38,8 +41,8 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-meta-warm-gray p-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary motion-reduce:animate-none" role="status" aria-label="Carregando" />
+        <div className="flex min-h-screen items-center justify-center bg-[#F7F8FA] p-4">
+          <Loader2 className="h-8 w-8 animate-spin text-[#2c37e2] motion-reduce:animate-none" role="status" aria-label="Carregando" />
         </div>
       }
     >
@@ -71,97 +74,103 @@ function LoginContent() {
   }
 
   return (
-    <main className="min-h-screen bg-meta-warm-gray text-meta-charcoal">
-      <div className="grid min-h-screen lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        {/* Apresentação: só no computador. No celular a página começa direto no acesso. */}
-        <section className="hidden grid-rows-[1fr_auto_1fr] gap-8 bg-primary px-12 py-10 text-white lg:grid xl:px-16 [@media(max-height:760px)]:gap-4 [@media(max-height:760px)]:py-6">
-          <div className="flex items-center gap-3 self-start">
-            <span className="flex h-16 w-14 shrink-0 items-center justify-center rounded-lg bg-white p-1.5">
-              <Image src="/brasao-tefe-logo.png" alt="Brasão de Tefé" width={146} height={192} className="h-full w-full object-contain" priority />
-            </span>
+    <main className="min-h-screen bg-[#F7F8FA] text-[#1C2B33]">
+      <div className="grid min-h-screen lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="relative hidden overflow-hidden bg-[#0e1e51] px-12 py-10 text-white lg:flex lg:flex-col lg:justify-between xl:px-16">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(96,165,250,0.26),transparent_28%),radial-gradient(circle_at_84%_72%,rgba(147,197,253,0.18),transparent_30%),linear-gradient(135deg,#0e1e51_0%,#1e2993_60%,#2238ae_100%)]" />
+          <div className="absolute inset-x-12 bottom-24 h-px bg-white/10" />
+
+          <div className="relative flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15">
+              <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+            </div>
             <div>
-              <p className="text-lg font-bold leading-tight">SGCAS</p>
-              <p className="text-xs text-white/75">Prefeitura de Tefé · SEDECTI</p>
+              <p className="text-lg font-semibold leading-tight">SGCAS</p>
+              <p className="text-xs text-white/65">Sistema de Gestão de Casos</p>
             </div>
           </div>
 
-          <div className="w-full max-w-xl 2xl:max-w-2xl">
-            <h1 className="!text-white text-4xl leading-[1.1] xl:text-5xl 2xl:text-6xl">
-              Sistema de Gestão de Casos da Assistência Social
-            </h1>
-            <p className="mt-6 max-w-lg text-lg leading-8 text-white/85 xl:text-xl xl:leading-9">
-              O atendimento da rede socioassistencial do município, da recepção ao encaminhamento, num só cadastro.
+          <div className="relative max-w-xl space-y-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-100/70">
+              SGCAS · Tefé
             </p>
-
-            <ul className="mt-10 space-y-5">
-              {[
-                [ConciergeBell, "Recepção e fila", "Registro da chegada, senha e chamada para o atendimento."],
-                [FolderOpen, "Prontuário e acompanhamento", "Histórico de cada pessoa e de cada caso, por unidade."],
-                [ArrowLeftRight, "Encaminhamentos entre unidades", "Quem encaminha, quem recebe e o que já foi feito."],
-              ].map(([Icone, titulo, texto]) => {
-                const Icon = Icone as typeof ConciergeBell;
-                return (
-                  <li key={titulo as string} className="flex gap-3">
-                    <Icon className="mt-0.5 h-5 w-5 shrink-0 text-white/85 xl:mt-1 xl:h-6 xl:w-6" aria-hidden="true" />
-                    <div>
-                      <p className="text-base font-semibold xl:text-lg">{titulo as string}</p>
-                      <p className="text-[15px] leading-6 text-white/85 xl:text-base">{texto as string}</p>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+            <h1 className="!text-white text-4xl font-medium leading-[1.08] tracking-[-0.01em] [text-wrap:wrap] xl:text-5xl">
+              Gestão simples para cada atendimento.
+            </h1>
+            <p className="max-w-md text-sm leading-6 text-white/72 [text-wrap:wrap]">
+              Recepção, fila e acompanhamentos em um fluxo único, seguro e organizado por perfil.
+            </p>
           </div>
 
-          <p className="self-end text-xs text-white/80">Acesso restrito a servidores autorizados.</p>
+          <div className="relative grid max-w-2xl grid-cols-3 gap-2.5">
+            {[
+              ["Entrar com SSO", LockKeyhole],
+              ["Aprovação do admin", CheckCircle2],
+              ["Recepção e fila", Clock3],
+            ].map(([label, Icon]) => (
+              <div key={label as string} className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.07] px-3 py-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10">
+                  <Icon className="h-4 w-4 text-blue-100" aria-hidden="true" />
+                </span>
+                <p className="text-xs font-semibold text-white/88">{label as string}</p>
+              </div>
+            ))}
+          </div>
         </section>
 
-        <section className="flex items-center justify-center px-4 py-8 sm:px-8">
-          <div className="w-full max-w-[26rem]">
-            <div className="mb-8 flex items-center gap-3 lg:hidden">
-              <span className="flex h-16 w-14 shrink-0 items-center justify-center rounded-lg border border-meta-divider bg-white p-1.5">
-                <Image src="/brasao-tefe-logo.png" alt="Brasão de Tefé" width={146} height={192} className="h-full w-full object-contain" priority />
-              </span>
+        <section className="flex items-center justify-center px-5 py-8 sm:px-8">
+          <div className="w-full max-w-[430px]">
+            <div className="mb-10 flex items-center gap-3 lg:hidden">
+              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#2c37e2] text-white">
+                <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+              </div>
               <div>
-                <p className="text-lg font-bold leading-tight">SGCAS</p>
-                <p className="text-xs text-meta-slate">Gestão de Casos da Assistência Social</p>
+                <p className="text-lg font-semibold leading-tight">SGCAS</p>
+                <p className="text-xs text-[#5D6C7B]">Sistema de Gestão de Casos</p>
               </div>
             </div>
 
-            <div className="rounded-card border border-meta-divider bg-white p-6 sm:p-8">
-              <h2 className="text-2xl">Entrar no SGCAS</h2>
-              <p className="mt-2 text-sm leading-6 text-meta-slate">
-                Use a sua conta do Tefé Cidadão para acessar o sistema.
-              </p>
+            <div className="rounded-lg border border-[#DEE3E9] bg-white p-6 shadow-[0_24px_60px_-38px_rgba(30,38,160,0.34)] sm:p-8">
+              <div className="mb-8 space-y-3">
+                <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-[#2c37e2]/10 text-[#2c37e2]">
+                  <ShieldCheck className="h-7 w-7" aria-hidden="true" />
+                </div>
+                <div>
+                  <h2 className="text-3xl font-medium leading-tight tracking-[-0.01em] text-[#1C2B33]">Entrar no SGCAS</h2>
+                  <p className="mt-2 text-sm leading-6 text-[#5D6C7B] [text-wrap:wrap]">
+                    Use sua conta institucional do Tefé Cidadão para acessar o sistema.
+                  </p>
+                </div>
+              </div>
 
               {loginError && (
-                <div className="mt-5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950" role="alert">
-                  <p className="font-semibold">{loginError.title}</p>
-                  <p className="mt-1 leading-5">{loginError.text}</p>
+                <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950" role="alert">
+                  <p className="font-medium">{loginError.title}</p>
+                  <p className="mt-1 leading-5 text-amber-900/80">{loginError.text}</p>
                 </div>
               )}
 
               <button
                 type="button"
-                className="button mt-6 w-full justify-between !min-h-12"
+                className="inline-flex h-12 w-full items-center justify-between whitespace-nowrap rounded-full bg-[#2c37e2] px-4 text-sm font-semibold tracking-tight text-white shadow-[0_16px_32px_-22px_rgba(30,38,170,0.9)] transition-all duration-200 hover:bg-[#2430c4] active:scale-[0.97] disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-[#DEE3E9] disabled:text-[#5D6C7B]/60 motion-reduce:transition-none motion-reduce:active:scale-100"
                 onClick={handleLogin}
                 disabled={entering || loading}
               >
-                <span className="inline-flex items-center gap-3">
+                <span className="inline-flex items-center gap-2">
                   <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white">
                     <Image src="/tefe-cidadao-mark.svg" alt="" width={20} height={20} className="object-contain" />
                   </span>
-                  {entering ? "Abrindo o Tefé Cidadão..." : "Entrar com Tefé Cidadão"}
+                  {entering ? "Abrindo Tefé Cidadão..." : "Entrar com Tefé Cidadão"}
                 </span>
                 {entering ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <ArrowRight className="h-4 w-4" aria-hidden="true" />}
               </button>
 
-              <p className="mt-5 border-t border-meta-divider pt-4 text-[13px] leading-5 text-meta-slate">
-                O SGCAS não tem senha própria. Quem ainda não tem perfil entra na fila de aprovação do administrador.
-              </p>
+              <div className="mt-6 rounded-lg bg-[#F1F4F7] px-4 py-3 text-xs leading-5 text-[#5D6C7B]">
+                O SGCAS não usa senha própria. Quem ainda não tem perfil entra na fila de aprovação do administrador.
+              </div>
             </div>
 
-            <p className="mt-6 text-center text-xs text-meta-slate">SEDECTI · Prefeitura de Tefé</p>
+            <p className="mt-6 text-center text-xs text-[#5D6C7B]">SEDECTI · Prefeitura de Tefé</p>
           </div>
         </section>
       </div>
