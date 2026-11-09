@@ -23,7 +23,43 @@ TEMPO_LIMITE = 15
 
 
 class ErroDoKeycloak(RuntimeError):
-    """Falha ao falar com o Tefe Cidadao. A mensagem e mostravel ao operador."""
+    """
+    Falha ao falar com o Tefe Cidadao. A mensagem e mostravel ao operador.
+
+    No login, `motivo` vai na volta para a tela (`/login?erro=<motivo>`) e diz a causa
+    real; `detalhe` e o resumo tecnico curto (status e codigo do Keycloak, ou o tipo do
+    erro), mostrado junto para quem nao tem acesso ao servidor poder repassar.
+    """
+
+    def __init__(self, mensagem: str, motivo: str = 'sso-falha', detalhe: str = ''):
+        super().__init__(mensagem)
+        self.motivo = motivo
+        self.detalhe = detalhe
+
+
+# Causas que o retorno do login distingue. Cada uma tem texto proprio na tela de
+# entrada (`front-sgcas/src/app/login/page.tsx`); a lista e a mesma la e aqui.
+MOTIVOS_DO_LOGIN = frozenset({
+    'sso-segredo',       # o Keycloak recusou as credenciais do client
+    'sso-retorno',       # o endereco de retorno da troca nao confere com o do login
+    'sso-codigo',        # codigo vencido, ja usado ou forjado
+    'sso-recusado',      # outra recusa (firewall, proxy, client desabilitado)
+    'sso-indisponivel',  # sem conexao, ou o Keycloak respondeu com erro 5xx
+    'sso-chaves',        # nao deu para baixar as chaves publicas do realm
+    'sso-relogio',       # token "vencido" ou "do futuro": relogio do servidor errado
+    'sso-emissor',       # o emissor do token nao e o KEYCLOAK_URL configurado
+    'sso-audiencia',     # o token nao traz a audiencia `account`
+    'sso-token',         # outro defeito no token
+    'sso-falha',         # qualquer outra falha
+})
+
+
+def _corpo_json(resposta) -> dict | None:
+    try:
+        corpo = resposta.json()
+    except ValueError:
+        return None
+    return corpo if isinstance(corpo, dict) else None
 
 
 def _base_realm() -> str:
@@ -66,20 +102,63 @@ def url_de_logout(id_token: str | None, pos_logout: str) -> str:
 
 
 def trocar_codigo_por_token(codigo: str, redirect_uri: str) -> dict:
-    resposta = requests.post(
-        f'{_base_realm()}/protocol/openid-connect/token',
-        data={
-            'grant_type': 'authorization_code',
-            'client_id': settings.KEYCLOAK_CLIENT_ID,
-            'client_secret': settings.KEYCLOAK_CLIENT_SECRET,
-            'code': codigo,
-            'redirect_uri': redirect_uri,
-        },
-        timeout=TEMPO_LIMITE,
-    )
+    try:
+        resposta = requests.post(
+            f'{_base_realm()}/protocol/openid-connect/token',
+            data={
+                'grant_type': 'authorization_code',
+                'client_id': settings.KEYCLOAK_CLIENT_ID,
+                'client_secret': settings.KEYCLOAK_CLIENT_SECRET,
+                'code': codigo,
+                'redirect_uri': redirect_uri,
+            },
+            timeout=TEMPO_LIMITE,
+        )
+    except requests.RequestException as erro:
+        # Sem isto a falha de rede subia como 500, sem explicar nada a ninguem.
+        raise ErroDoKeycloak(
+            f'Não foi possível concluir o acesso pelo Tefé Cidadão: sem conexão ({type(erro).__name__})',
+            motivo='sso-indisponivel',
+            detalhe=type(erro).__name__,
+        ) from erro
     if resposta.status_code != 200:
-        raise ErroDoKeycloak('Não foi possível concluir o acesso pelo Tefé Cidadão')
+        raise _recusa_na_troca(resposta)
     return resposta.json()
+
+
+def _recusa_na_troca(resposta) -> ErroDoKeycloak:
+    """
+    Traduz a recusa do endpoint de token na causa que a tela e o log mostram.
+
+    O Keycloak responde `{"error": ..., "error_description": ...}`; um firewall ou proxy
+    no caminho responde HTML, e entao o que identifica quem recusou e o cabecalho.
+    """
+    status = resposta.status_code
+    corpo = _corpo_json(resposta)
+    codigo = str((corpo or {}).get('error') or '')
+    descricao = str((corpo or {}).get('error_description') or '')[:200]
+
+    if codigo in ('invalid_client', 'unauthorized_client') or status == 401:
+        motivo = 'sso-segredo'
+    elif codigo == 'invalid_grant' and 'redirect' in descricao.lower():
+        motivo = 'sso-retorno'
+    elif codigo == 'invalid_grant':
+        motivo = 'sso-codigo'
+    elif status >= 500:
+        motivo = 'sso-indisponivel'
+    else:
+        motivo = 'sso-recusado'
+
+    if corpo is None:
+        descricao = (
+            f'resposta que não é do Keycloak (Content-Type {resposta.headers.get("Content-Type", "?")}, '
+            f'Server {resposta.headers.get("Server", "?")})'
+        )
+    return ErroDoKeycloak(
+        f'O Tefé Cidadão recusou a troca do código: HTTP {status} {codigo} {descricao}'.strip(),
+        motivo=motivo,
+        detalhe=f'{status}-{codigo}' if codigo else str(status),
+    )
 
 
 # ─── Validacao do token ─────────────────────────────────────────────
@@ -125,7 +204,26 @@ def validar_token(access_token: str) -> dict:
             leeway=60,
         )
     except jwt.PyJWTError as erro:
-        raise ErroDoKeycloak(f'Token do Tefé Cidadão inválido: {erro}') from erro
+        raise ErroDoKeycloak(
+            f'Token do Tefé Cidadão inválido: {erro}',
+            motivo=_motivo_do_token(erro),
+            detalhe=type(erro).__name__,
+        ) from erro
+
+
+def _motivo_do_token(erro: jwt.PyJWTError) -> str:
+    # A ordem importa: as chaves sao um PyJWTError tambem, e vem antes do generico.
+    if isinstance(erro, jwt.PyJWKClientError):
+        return 'sso-chaves'
+    if isinstance(erro, (jwt.ExpiredSignatureError, jwt.ImmatureSignatureError)):
+        # Validado logo apos a troca, um token novo so parece vencido, ou ainda
+        # nao valido, se o relogio do servidor estiver errado.
+        return 'sso-relogio'
+    if isinstance(erro, jwt.InvalidIssuerError):
+        return 'sso-emissor'
+    if isinstance(erro, jwt.InvalidAudienceError):
+        return 'sso-audiencia'
+    return 'sso-token'
 
 
 # ─── Conta de servico ───────────────────────────────────────────────

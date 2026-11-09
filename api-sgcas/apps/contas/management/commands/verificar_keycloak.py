@@ -1,7 +1,7 @@
 """
 Confere, de fora, se o Tefé Cidadão (Keycloak) está configurado como o SGCAS exige.
 
-Sem isto, o defeito só aparece no meio do login ("sem-acesso", "aguardando aprovação") e
+Sem isto, o defeito só aparece no meio do login ("sso-segredo", "aguardando aprovação") e
 quem o investiga não sabe qual das exigências falhou. Aqui cada uma é testada e o que falta
 sai em português, com o caminho no console do Keycloak.
 
@@ -119,7 +119,7 @@ class Command(BaseCommand):
             self._falha(
                 f'O emissor dos tokens é "{emissor}", mas o SGCAS exige exatamente "{base}": o '
                 'endereço público (hostname) do Keycloak precisa ser o de KEYCLOAK_URL, senão todo '
-                'login volta com "sem-acesso".'
+                'login volta com "sso-emissor".'
             )
         else:
             self._ok(f'O realm responde e o emissor dos tokens é o esperado ({emissor}).')

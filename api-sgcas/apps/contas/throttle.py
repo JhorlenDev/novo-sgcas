@@ -44,6 +44,7 @@ from django.db import DatabaseError, connection, transaction
 from django.http import HttpResponseRedirect, JsonResponse
 
 from apps.comum.rede import ip_do_cliente
+from apps.contas.keycloak import MOTIVOS_DO_LOGIN
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +64,9 @@ LIMITES = {
 FALHAS_NO_CALLBACK = 10
 
 # `erro=` que o retorno coloca na volta ao login, quando o problema esta no pedido
-# (forjado, repetido, codigo recusado). Os demais sao da conta de quem chegou.
-ERROS_DE_PEDIDO = frozenset({'estado-invalido', 'sem-codigo', 'sem-acesso'})
+# (forjado, repetido, codigo recusado) ou na conversa com o Tefe Cidadao. Os demais
+# sao da conta de quem chegou.
+ERROS_DE_PEDIDO = frozenset({'estado-invalido', 'sem-codigo'}) | MOTIVOS_DO_LOGIN
 
 # Rotas que o navegador abre por navegacao: um JSON cru na tela nao explica nada.
 ROTAS_DE_NAVEGACAO = frozenset({ROTA_DO_LOGIN, ROTA_DO_RETORNO})

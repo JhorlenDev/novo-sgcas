@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import secrets
 import time
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.http import HttpResponseRedirect, JsonResponse
@@ -80,8 +81,11 @@ def callback(request):
         )
         return HttpResponseRedirect(_frontend(f'/login?erro={erro.motivo}'))
     except keycloak.ErroDoKeycloak as erro:
-        logger.warning('Erro no login Keycloak: %s', erro)
-        return HttpResponseRedirect(_frontend('/login?erro=sem-acesso'))
+        # A tela recebe a causa e o detalhe técnico: quem não tem acesso ao servidor
+        # consegue saber o que houve. O log guarda a resposta inteira do Keycloak.
+        logger.warning('Erro no login Keycloak: motivo=%s detalhe=%s. %s', erro.motivo, erro.detalhe, erro)
+        volta = {'erro': erro.motivo, 'ref': erro.detalhe} if erro.detalhe else {'erro': erro.motivo}
+        return HttpResponseRedirect(_frontend(f'/login?{urlencode(volta)}'))
 
     request.session.cycle_key()
     request.session[CHAVE_OPERADOR] = operador.id

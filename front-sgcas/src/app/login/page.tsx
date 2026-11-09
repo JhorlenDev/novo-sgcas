@@ -10,10 +10,58 @@ import { defaultRouteForRole, useAuth } from "@/lib/auth";
 // A tela de entrada usa a paleta do seu desenho (índigo #2c37e2 e os cinzas originais) com
 // valores fixos, e não as cores do tema: assim ela não muda quando o tema do sistema mudar.
 
+// Avise quem mantém o servidor: a conta está certa, o defeito é de configuração ou de rede.
+const AVISE = "Sua conta não tem problema. Avise quem mantém o servidor e informe o código abaixo.";
+
 const errors: Record<string, { title: string; text: string }> = {
+  // Versões anteriores da API mandavam isto para qualquer falha com o Tefé Cidadão.
   "sem-acesso": {
-    title: "Acesso ainda não liberado",
-    text: "Sua conta entrou pelo Tefé Cidadão, mas ainda não tem perfil aprovado no SGCAS.",
+    title: "Não foi possível concluir a entrada",
+    text: "O SGCAS não conseguiu confirmar seu acesso com o Tefé Cidadão. Tente de novo; se continuar, avise quem mantém o servidor.",
+  },
+  "sso-segredo": {
+    title: "Servidor com o segredo do Tefé Cidadão errado",
+    text: `O Tefé Cidadão recusou as credenciais do SGCAS: o KEYCLOAK_CLIENT_SECRET do servidor não confere com o do client. ${AVISE}`,
+  },
+  "sso-retorno": {
+    title: "Endereço de retorno não confere",
+    text: `O endereço de retorno do servidor (KEYCLOAK_REDIRECT_URI) não é o cadastrado no Tefé Cidadão. ${AVISE}`,
+  },
+  "sso-codigo": {
+    title: "Código de acesso recusado",
+    text: "O código devolvido pelo Tefé Cidadão venceu ou já foi usado, por exemplo ao voltar ou recarregar a página. Entre outra vez.",
+  },
+  "sso-recusado": {
+    title: "O Tefé Cidadão recusou a conexão do servidor",
+    text: `A conexão do servidor do SGCAS com o Tefé Cidadão foi recusada (firewall, proxy ou client desativado). ${AVISE}`,
+  },
+  "sso-indisponivel": {
+    title: "Tefé Cidadão fora de alcance",
+    text: "O servidor do SGCAS não conseguiu falar com o Tefé Cidadão: ele está fora do ar ou a rede do servidor está bloqueada. Tente em alguns minutos; se continuar, avise quem mantém o servidor.",
+  },
+  "sso-chaves": {
+    title: "Não foi possível conferir a entrada",
+    text: `O servidor do SGCAS não conseguiu baixar as chaves do Tefé Cidadão para conferir o login (rede do servidor até o SSO). ${AVISE}`,
+  },
+  "sso-relogio": {
+    title: "Relógio do servidor errado",
+    text: `A entrada foi recusada porque o relógio do servidor do SGCAS está adiantado ou atrasado. ${AVISE}`,
+  },
+  "sso-emissor": {
+    title: "Endereço do Tefé Cidadão diferente do configurado",
+    text: `O login veio de um endereço diferente do KEYCLOAK_URL do servidor. ${AVISE}`,
+  },
+  "sso-audiencia": {
+    title: "Login sem a audiência esperada",
+    text: "O Tefé Cidadão emitiu o login sem a audiência account que o SGCAS exige. Peça a quem administra o Tefé Cidadão para manter na sua conta os papéis padrão do realm.",
+  },
+  "sso-token": {
+    title: "Login do Tefé Cidadão inválido",
+    text: "O servidor do SGCAS recusou o token devolvido pelo Tefé Cidadão. Tente de novo; se continuar, avise quem mantém o servidor e informe o código abaixo.",
+  },
+  "sso-falha": {
+    title: "Não foi possível concluir a entrada",
+    text: "Houve uma falha na conversa com o Tefé Cidadão. Tente de novo; se continuar, avise quem mantém o servidor e informe o código abaixo.",
   },
   "estado-invalido": {
     title: "Sessão expirada",
@@ -59,7 +107,12 @@ function LoginContent() {
 
   const loginError = useMemo(() => {
     const error = params.get("erro");
-    return error ? errors[error] : undefined;
+    if (!error || !errors[error]) return undefined;
+    // O detalhe técnico vem da URL: só aparece no formato que a API gera, para um link
+    // forjado não conseguir escrever um texto qualquer dentro da caixa de erro.
+    const ref = params.get("ref");
+    const detail = ref && /^[A-Za-z0-9_.-]{1,60}$/.test(ref) ? ref : null;
+    return { ...errors[error], code: detail ? `${error} · ${detail}` : error };
   }, [params]);
 
   useEffect(() => {
@@ -147,6 +200,7 @@ function LoginContent() {
                 <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950" role="alert">
                   <p className="font-medium">{loginError.title}</p>
                   <p className="mt-1 leading-5 text-amber-900/80">{loginError.text}</p>
+                  <p className="mt-2 break-all font-mono text-xs text-amber-900/70">Código: {loginError.code}</p>
                 </div>
               )}
 

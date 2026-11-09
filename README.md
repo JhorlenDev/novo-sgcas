@@ -337,7 +337,22 @@ Variáveis da API para o login em produção (veja o modelo em [`api-sgcas/.env.
 
 **Confira antes de testar o login.** Com o `.env` preenchido, rode na API `python manage.py verificar_keycloak` (ou `docker compose run --rm api python manage.py verificar_keycloak`). Ele testa cada item acima contra o Tefé Cidadão real (emissor, chaves, client e endereço de retorno, segredo, funções da conta de serviço, os 7 papéis, se alguém já tem `ADMIN`, e opções inseguras do client) e diz em português o que falta. Só lê: não altera nada e não imprime o segredo.
 
-Como saber se funcionou: abra `https://sgcas.tefe.am.gov.br/login`, clique em **Entrar com Tefé Cidadão**, entre com a conta que recebeu `ADMIN` e confira que cai no Painel. Se voltar para `/login?erro=…`: `estado-invalido` (sessão expirada ou cookies bloqueados), `sem-codigo` (o SSO não devolveu o código), `conta-em-conflito` (o e-mail já pertence a outra conta do SGCAS), `email-nao-confirmado` (item 5) e `sem-acesso` (token recusado: itens 1, 2 e 4). Os detalhes ficam no log da API.
+Como saber se funcionou: abra `https://sgcas.tefe.am.gov.br/login`, clique em **Entrar com Tefé Cidadão**, entre com a conta que recebeu `ADMIN` e confira que cai no Painel. Se voltar para `/login?erro=…`: `estado-invalido` (sessão expirada ou cookies bloqueados), `sem-codigo` (o SSO não devolveu o código), `conta-em-conflito` (o e-mail já pertence a outra conta do SGCAS), `email-nao-confirmado` (item 5). Quando a falha é na conversa com o Tefé Cidadão, o código diz a causa e a tela mostra o motivo e um detalhe técnico (`ref`, o status e o código que o Keycloak devolveu), sem precisar abrir o servidor:
+
+| `erro=` | Causa | O que fazer |
+| --- | --- | --- |
+| `sso-segredo` | O Keycloak recusou as credenciais do client | Confira `KEYCLOAK_CLIENT_SECRET` (aba *Credentials*) e recrie a API com `docker compose up -d api` |
+| `sso-retorno` | O endereço de retorno da troca não confere | Confira `KEYCLOAK_REDIRECT_URI` e os *Valid redirect URIs* do client |
+| `sso-codigo` | Código vencido, já usado ou repetido | Entre de novo; se persistir, veja o relógio do servidor |
+| `sso-recusado` | Outra recusa (firewall, proxy, client desativado) | O log mostra quem respondeu (`Server`) |
+| `sso-indisponivel` | Sem conexão com o SSO, ou erro 5xx dele | Confira a rede do servidor até o SSO (item 7) |
+| `sso-chaves` | Não deu para baixar as chaves públicas do realm | Rede do servidor até o SSO (item 7) |
+| `sso-relogio` | Token "vencido" ou "do futuro" | Acerte o relógio do servidor (`timedatectl set-ntp true`) |
+| `sso-emissor` | O emissor do token não é o `KEYCLOAK_URL` | Use em `KEYCLOAK_URL` o endereço público do SSO |
+| `sso-audiencia` | O token não traz a audiência `account` | Item 4 |
+| `sso-token` | Outro defeito no token | Veja o log |
+
+Cada falha também fica no log da API, numa linha `Erro no login Keycloak: motivo=… detalhe=…` com a resposta do Keycloak (sem segredo e sem o código): `docker compose logs api | grep "Erro no login Keycloak"`.
 
 ## Variáveis de ambiente
 
