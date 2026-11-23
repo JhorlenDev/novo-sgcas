@@ -133,11 +133,11 @@ function LoginContent() {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(96,165,250,0.26),transparent_28%),radial-gradient(circle_at_84%_72%,rgba(147,197,253,0.18),transparent_30%),linear-gradient(135deg,rgba(6,31,67,0.98)_0%,rgba(13,68,150,0.92)_58%,rgba(16,91,190,0.84)_100%)]" />
           <div className="absolute inset-x-12 bottom-24 h-px bg-white/10" />
 
-          <div className="relative flex items-center gap-3">
-            <BrandLogo />
+          <div className="relative flex items-center gap-5">
+            <BrandLogo className="h-20 w-[120px]" />
             <div>
-              <p className="text-lg font-semibold leading-tight">SGCAS</p>
-              <p className="text-xs text-white/65">Sistema de Gestão de Casos</p>
+              <p className="text-3xl font-bold leading-tight">SGCAS</p>
+              <p className="mt-1 text-base text-white/75">Sistema de Gestão de Casos</p>
             </div>
           </div>
 
@@ -171,11 +171,11 @@ function LoginContent() {
 
         <section className="flex items-center justify-center px-5 py-8 sm:px-8">
           <div className="w-full max-w-[430px]">
-            <div className="mb-10 flex items-center gap-3 lg:hidden">
-              <BrandLogo />
+            <div className="mb-10 flex items-center gap-4 lg:hidden">
+              <BrandLogo className="h-14 w-[84px] sm:h-16 sm:w-24" />
               <div>
-                <p className="text-lg font-semibold leading-tight">SGCAS</p>
-                <p className="text-xs text-[#5D6C7B]">Sistema de Gestão de Casos</p>
+                <p className="text-2xl font-bold leading-tight sm:text-3xl">SGCAS</p>
+                <p className="mt-1 text-sm text-[#5D6C7B]">Sistema de Gestão de Casos</p>
               </div>
             </div>
 
