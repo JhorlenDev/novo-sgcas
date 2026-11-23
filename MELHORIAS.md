@@ -33,7 +33,7 @@ Achados durante o trabalho, também corrigidos:
 - [x] O termo exibido ao cidadão e os textos de `docs/` têm o CNPJ (04.426.383/0001-15, dígitos verificadores conferidos) e o endereço da Prefeitura, sem nenhum campo entre colchetes (`b1e7c6f`). Falta só o encarregado, acima.
 
 ### 5. Verificações obrigatórias
-- [x] CI no GitHub Actions para a API e o frontend, `ruff` no Python e `npm run typecheck` (`daef5be`). A tarefa da API foi rodada num container Linux igual ao do CI: 688 testes, todos passando. O CONTRIBUTING explica, sem jargão, o que é o CI e o que fazer quando fica vermelho.
+- [x] CI no GitHub Actions para a API e o frontend, `ruff` no Python e `npm run typecheck` (`daef5be`). A tarefa da API foi rodada num container Linux igual ao do CI: 696 testes, todos passando. O CONTRIBUTING explica, sem jargão, o que é o CI e o que fazer quando fica vermelho.
 
 ### 6. Testes do frontend
 - [x] Playwright com runner, API simulada e 59 testes de navegador cobrindo as telas e os fluxos principais (`34808f0`, `9d89691`, `694288e`, `e760529`). Com o código de antes das correções, os testes dos defeitos falham, um por defeito. O teste de login real fica pulado sem credenciais.
