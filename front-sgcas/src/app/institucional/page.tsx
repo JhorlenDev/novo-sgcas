@@ -1,97 +1,17 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { Building2, Plus, Search } from "lucide-react";
+import { Building2, Plus } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { Button, PageHeader, SecondaryButton } from "@/components/ui";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, SecondaryButton, SectionHeading, Select } from "@/components/ui";
+  SEM_CLASSIFICACAO, corpoDaClassificacao, type Classificacao,
+} from "@/components/institucional/classificacao";
+import { JanelaClassificar, JanelaNovaUnidade, JanelaNovoServico } from "@/components/institucional/janelas";
+import { TabelaDeServicos, TabelaDeUnidades } from "@/components/institucional/tabelas";
 import { api, avisoDeCarga, lerOuPadrao, mensagemDaApi } from "@/lib/api";
-import { CATEGORIA_DE_BENEFICIO, TIPOS_DE_AUXILIO } from "@/lib/auxilios";
 import { useAuth } from "@/lib/auth";
 import type { Coordenacao, Demanda, Servico, Unidade } from "@/types/sgcas";
-
-const tiposDeUnidade = [
-  ["CRAS", "CRAS"],
-  ["CREAS", "CREAS"],
-  ["CENTRO_POP", "Centro POP"],
-  ["ABRIGO", "Acolhimento institucional"],
-  ["SEDE", "Sede"],
-  ["OUTRO", "Outro"],
-] as const;
-
-// Existe para lotar os devs (SEDECTI), criada pelo catálogo: não é opção ao cadastrar unidade nova.
-const TIPO_MANUTENCAO = "MANUTENCAO";
-
-function rotuloDoTipoDeUnidade(tipo?: string | null) {
-  if (tipo === TIPO_MANUTENCAO) return "Manutenção do sistema";
-  return tiposDeUnidade.find(([valor]) => valor === tipo)?.[1] ?? tipo ?? "—";
-}
-
-type Classificacao = { demandaId: string; tipo: string };
-
-const SEM_CLASSIFICACAO: Classificacao = { demandaId: "", tipo: "" };
-
-/** O que vai à API: o tipo de auxílio só existe em serviço da categoria "Benefício Eventual". */
-function corpoDaClassificacao(classificacao: Classificacao, demandas: Demanda[]) {
-  const ehBeneficio = demandas.find((d) => d.id === classificacao.demandaId)?.nome === CATEGORIA_DE_BENEFICIO;
-  return {
-    demanda_id: classificacao.demandaId || null,
-    tipo_de_beneficio: ehBeneficio ? classificacao.tipo || null : null,
-  };
-}
-
-/**
- * Onde o serviço se classifica: a categoria municipal e, nos auxílios, o tipo.
- * É a mesma escolha ao cadastrar e ao corrigir um serviço, por isso é um componente só.
- */
-function CamposDeClassificacao({
-  demandas,
-  valor,
-  onChange,
-}: {
-  demandas: Demanda[];
-  valor: Classificacao;
-  onChange: (proximo: Classificacao) => void;
-}) {
-  const ehBeneficio = demandas.find((d) => d.id === valor.demandaId)?.nome === CATEGORIA_DE_BENEFICIO;
-
-  return (
-    <>
-      <Field label="Categoria municipal">
-        <Select value={valor.demandaId} onChange={(event) => onChange({ demandaId: event.target.value, tipo: "" })}>
-          <option value="">Sem categoria</option>
-          {demandas.map((demanda) => (
-            <option key={demanda.id} value={demanda.id}>{demanda.nome}</option>
-          ))}
-        </Select>
-      </Field>
-      {ehBeneficio && (
-        <>
-          <Field label="Tipo de auxílio">
-            <Select value={valor.tipo} onChange={(event) => onChange({ ...valor, tipo: event.target.value })}>
-              <option value="">Não informado</option>
-              {TIPOS_DE_AUXILIO.map((tipo) => (
-                <option key={tipo.valor} value={tipo.valor}>{tipo.rotulo}</option>
-              ))}
-            </Select>
-          </Field>
-          <p className="-mt-2 text-xs leading-5 text-meta-slate">
-            Informe o tipo para o sistema avisar quando a mesma pessoa pedir o mesmo auxílio de novo. O auxílio de
-            nascimento (o auxílio maternidade) só pode ser concedido uma vez a cada 12 meses; os demais tipos, uma vez
-            por mês. Sem o tipo, o aviso na recepção só considera o mês.
-          </p>
-        </>
-      )}
-    </>
-  );
-}
 
 export default function InstitucionalPage() {
   const { user } = useAuth();
@@ -261,235 +181,51 @@ export default function InstitucionalPage() {
       {mensagem && <div className="notice mb-4" role="status">{mensagem}</div>}
 
       <div className="grid gap-4">
-        <Card>
-          <SectionHeading title="Unidades" count={unidades.length} />
-
-          {unidades.length === 0 ? (
-            <EmptyState title="Nenhuma unidade" text="Cadastre a primeira unidade para vincular serviços e operadores." />
-          ) : (
-            <div className="table-wrap">
-              <table className="table table-stack">
-                <thead>
-                  <tr>
-                    <th>Nome</th>
-                    <th>Tipo</th>
-                    <th>Sigla</th>
-                    <th>Situação</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {unidades.map((unidade) => (
-                    <tr key={unidade.id}>
-                      <td data-label="Nome">
-                        <strong>{unidade.nome}</strong>
-                        {unidade.coordenacao && <small className="block text-meta-slate">{unidade.coordenacao}</small>}
-                      </td>
-                      <td data-label="Tipo">{rotuloDoTipoDeUnidade(unidade.tipo)}</td>
-                      <td data-label="Sigla">{unidade.sigla ?? "—"}</td>
-                      <td data-label="Situação">
-                        <Badge tone={unidade.ativa === false ? "bad" : "good"}>
-                          {unidade.ativa === false ? "Inativa" : "Ativa"}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-
-        <Card>
-          <SectionHeading
-            title="Serviços"
-            count={servicosVisiveis.length === servicos.length ? `${servicos.length} ativos` : `${servicosVisiveis.length} de ${servicos.length}`}
-          />
-
-          {servicos.length > 0 && (
-            <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:max-w-2xl">
-              <Field label="Unidade">
-                <Select value={filtroDeUnidade} onChange={(event) => setFiltroDeUnidade(event.target.value)}>
-                  <option value="">Todas as unidades</option>
-                  {unidades.map((unidade) => (
-                    <option key={unidade.id} value={unidade.id}>{unidade.nome}</option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Buscar serviço">
-                <span className="relative block">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-meta-slate" aria-hidden="true" />
-                  <Input className="pl-9" type="search" value={busca} onChange={(event) => setBusca(event.target.value)} placeholder="Nome do serviço" />
-                </span>
-              </Field>
-            </div>
-          )}
-
-          {servicos.length === 0 ? (
-            <EmptyState title="Nenhum serviço" text="Cadastre os serviços que aparecem na recepção e no encaminhamento." />
-          ) : servicosVisiveis.length === 0 ? (
-            <EmptyState title="Nenhum serviço encontrado" text="Mude a unidade ou o termo da busca." />
-          ) : (
-            <div className="table-wrap">
-              <table className="table table-stack">
-                <thead>
-                  <tr>
-                    <th>Serviço</th>
-                    <th>Unidade</th>
-                    <th>Categoria</th>
-                    <th><span className="sr-only">Ações</span></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {servicosVisiveis.map((servico) => (
-                    <tr key={servico.id}>
-                      <td data-label="Serviço">
-                        <strong>{servico.nome}</strong>
-                        {servico.descricao && <small className="mt-0.5 block text-meta-slate">{servico.descricao}</small>}
-                      </td>
-                      <td data-label="Unidade">{servico.unidade_nome}</td>
-                      <td data-label="Categoria">
-                        {servico.demanda_nome ?? <span className="text-meta-slate">Sem categoria</span>}
-                        {servico.demanda_nome === CATEGORIA_DE_BENEFICIO && (
-                          <small className="block text-meta-slate">
-                            {servico.tipo_de_beneficio_rotulo ?? "Tipo de auxílio não informado"}
-                          </small>
-                        )}
-                      </td>
-                      <td className="md:w-px md:whitespace-nowrap md:text-right">
-                        {podeClassificar(servico) && (
-                          <SecondaryButton type="button" size="sm" onClick={() => abrirClassificacao(servico)}>
-                            Classificar
-                          </SecondaryButton>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
+        <TabelaDeUnidades unidades={unidades} />
+        <TabelaDeServicos
+          servicos={servicos}
+          visiveis={servicosVisiveis}
+          unidades={unidades}
+          filtroDeUnidade={filtroDeUnidade}
+          onFiltroDeUnidade={setFiltroDeUnidade}
+          busca={busca}
+          onBusca={setBusca}
+          podeClassificar={podeClassificar}
+          onClassificar={abrirClassificacao}
+        />
       </div>
 
-      <Dialog open={modalUnidade} onOpenChange={setModalUnidade}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Nova unidade</DialogTitle>
-            <DialogDescription>Cadastre uma unidade da rede para receber operadores, serviços e atendimentos.</DialogDescription>
-          </DialogHeader>
+      <JanelaNovaUnidade
+        aberta={modalUnidade}
+        onAbertaChange={setModalUnidade}
+        coordenacoes={coordenacoes}
+        erro={erroDaUnidade}
+        salvando={salvando}
+        onSalvar={criarUnidade}
+      />
 
-          <form className="grid gap-4" onSubmit={criarUnidade}>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Nome">
-                <Input name="nome" placeholder="CRAS Centro" required />
-              </Field>
-              <Field label="Sigla">
-                <Input name="sigla" placeholder="CRAS-CENTRO" required />
-              </Field>
-              <Field label="Tipo">
-                <Select name="tipo" defaultValue="CRAS" required>
-                  {tiposDeUnidade.map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
-                  ))}
-                </Select>
-              </Field>
-              {coordenacoes.length > 0 ? (
-                <Field label="Coordenação (opcional)">
-                  <Select name="coordenacao_id">
-                    <option value="">Sem coordenação</option>
-                    {coordenacoes.map((coordenacao) => (
-                      <option key={coordenacao.id} value={coordenacao.id}>{coordenacao.nome}</option>
-                    ))}
-                  </Select>
-                </Field>
-              ) : (
-                <input name="coordenacao_id" type="hidden" value="" />
-              )}
-              <Field label="Telefone">
-                <Input name="telefone" placeholder="(92) 99999-9999" />
-              </Field>
-              <Field label="Endereço">
-                <Input name="endereco" />
-              </Field>
-            </div>
+      <JanelaNovoServico
+        aberta={modalServico}
+        onAbertaChange={setModalServico}
+        unidades={unidades}
+        demandas={demandas}
+        classificacao={classificacao}
+        onClassificacao={setClassificacao}
+        erro={erroDoServico}
+        salvando={salvando}
+        onSalvar={criarServico}
+      />
 
-            {coordenacoes.length === 0 && (
-              <div className="rounded-lg bg-meta-soft-gray px-4 py-3 text-sm leading-6 text-meta-slate">
-                Coordenação é opcional. Como não há coordenações cadastradas, a unidade será criada sem vínculo.
-              </div>
-            )}
-
-            {erroDaUnidade && <div className="notice" role="alert">{erroDaUnidade}</div>}
-
-            <DialogFooter>
-              <SecondaryButton type="button" onClick={() => setModalUnidade(false)} disabled={salvando}>
-                Cancelar
-              </SecondaryButton>
-              <Button disabled={salvando}>{salvando ? "Salvando..." : "Cadastrar unidade"}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={modalServico} onOpenChange={setModalServico}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Novo serviço</DialogTitle>
-            <DialogDescription>Cadastre um serviço ofertado por uma unidade. Ele aparecerá na recepção.</DialogDescription>
-          </DialogHeader>
-
-          <form className="grid gap-4" onSubmit={criarServico}>
-            <Field label="Nome do serviço">
-              <Input name="nome" placeholder="Ex.: Cesta básica" required />
-            </Field>
-            <Field label="Unidade">
-              <Select name="unidade_id" required>
-                <option value="">Selecione</option>
-                {unidades.map((unidade) => (
-                  <option key={unidade.id} value={unidade.id}>{unidade.nome}</option>
-                ))}
-              </Select>
-            </Field>
-            <CamposDeClassificacao demandas={demandas} valor={classificacao} onChange={setClassificacao} />
-            <Field label="Descrição">
-              <textarea className="input" name="descricao" placeholder="Descrição curta do serviço" />
-            </Field>
-
-            {erroDoServico && <div className="notice" role="alert">{erroDoServico}</div>}
-
-            <DialogFooter>
-              <SecondaryButton type="button" onClick={() => setModalServico(false)} disabled={salvando}>
-                Cancelar
-              </SecondaryButton>
-              <Button disabled={salvando}>{salvando ? "Salvando..." : "Cadastrar serviço"}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={editando !== null} onOpenChange={(aberto) => { if (!aberto) setEditando(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Classificar serviço</DialogTitle>
-            <DialogDescription>
-              {editando ? `${editando.nome} — ${editando.unidade_nome}. ` : ""}
-              A categoria liga o serviço ao controle de repetição de auxílio.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form className="grid gap-4" onSubmit={salvarClassificacao}>
-            {erroDaEdicao && <div className="notice" role="alert">{erroDaEdicao}</div>}
-            <CamposDeClassificacao demandas={demandas} valor={edicao} onChange={setEdicao} />
-
-            <DialogFooter>
-              <SecondaryButton type="button" onClick={() => setEditando(null)} disabled={salvando}>
-                Cancelar
-              </SecondaryButton>
-              <Button disabled={salvando}>{salvando ? "Salvando..." : "Salvar classificação"}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <JanelaClassificar
+        servico={editando}
+        onFechar={() => setEditando(null)}
+        demandas={demandas}
+        valor={edicao}
+        onChange={setEdicao}
+        erro={erroDaEdicao}
+        salvando={salvando}
+        onSalvar={salvarClassificacao}
+      />
     </AppShell>
   );
 }
