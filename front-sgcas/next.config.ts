@@ -19,7 +19,11 @@ const politicaDeConteudo = [
 const nextConfig: NextConfig = {
   // Não anuncia o framework (e a versão) em toda resposta.
   poweredByHeader: false,
-  allowedDevOrigins: ["192.168.88.180"],
+  // Em desenvolvimento, o Next só atende os próprios recursos para `localhost`. Para abrir o
+  // front de outra máquina da rede, liste o nome ou IP dela, sem `http://` nem porta:
+  //   SGCAS_DEV_ORIGINS=192.168.0.10 npm run dev
+  // (as escritas também precisam dessa origem em CSRF_TRUSTED_ORIGINS_EXTRAS, no .env da API).
+  allowedDevOrigins: (process.env.SGCAS_DEV_ORIGINS ?? "").split(",").map((origem) => origem.trim()).filter(Boolean),
   trailingSlash: true,
   skipTrailingSlashRedirect: true,
   turbopack: {
@@ -49,8 +53,9 @@ const nextConfig: NextConfig = {
     ];
   },
   async rewrites() {
-    const apiUrl = process.env.SGCAS_API_URL ?? "http://localhost:8000";
-    //const apiUrl = process.env.SGCAS_API_URL ?? "http://localhost:8001";
+    // 127.0.0.1, e não "localhost": no Windows, "localhost" tenta antes o IPv6, e a API
+    // (runserver ou a porta do Docker) só escuta no IPv4. O ALLOWED_HOSTS da API já aceita os dois.
+    const apiUrl = process.env.SGCAS_API_URL ?? "http://127.0.0.1:8000";
     return [
       ...[
         "access-requests",

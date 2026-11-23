@@ -1,9 +1,9 @@
 """
 Configuracao do backend do SGCAS.
 
-O banco e o mesmo que o backend anterior usa: nao ha migracao de dados, e os
-modelos sao escritos sobre as tabelas existentes com `db_table`. Por isso o
-Django nao gerencia o esquema — `managed = False` nos modelos de dominio.
+Os modelos mantem os nomes de tabela e de coluna do backend anterior (Prisma), com
+`db_table` e `db_column`, e o Django gerencia o esquema: `managed = True` e
+migrations versionadas em `apps/*/migrations`.
 """
 import base64
 from pathlib import Path
@@ -97,11 +97,10 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'sgcas.wsgi.application'
 
-# O DATABASE_URL do .env aponta para o mesmo Postgres do backend atual — e e o
-# mesmo valor lido pelo Prisma, que aceita parametros que o psycopg recusa como
-# opcao de conexao (`schema`, `connection_limit`). Removidos aqui para que os
-# dois backends possam conviver com uma unica variavel de ambiente durante a
-# transicao, em vez de duas que podem divergir em silencio.
+# Um DATABASE_URL no formato do Prisma (o backend anterior) traz parametros que o
+# psycopg recusa como opcao de conexao (`schema`, `connection_limit`). Eles sao
+# ignorados aqui: um .env antigo, copiado daquele backend, continua funcionando em
+# vez de derrubar a API no boot.
 _PARAMS_DO_PRISMA = {'schema', 'connection_limit', 'pool_timeout', 'connect_timeout', 'pgbouncer'}
 
 def _banco_do_ambiente() -> dict:

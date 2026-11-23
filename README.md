@@ -205,13 +205,13 @@ POSTGRES_USER=sgcas
 POSTGRES_PASSWORD=sgcas_local_dev
 POSTGRES_DB=sgcas
 POSTGRES_PORT=5434
-DATABASE_URL=postgresql://sgcas:sgcas_local_dev@localhost:5434/sgcas
+DATABASE_URL=postgresql://sgcas:sgcas_local_dev@127.0.0.1:5434/sgcas
 FRONTEND_URL=http://localhost:3000
 CORS_ORIGIN=http://localhost:3000
 KEYCLOAK_REDIRECT_URI=http://localhost:3000/api/auth/keycloak/callback
 ```
 
-Esses valores de banco são apenas para desenvolvimento local. Preencha também os dados de Keycloak descritos em [Login e primeiro acesso](#login-e-primeiro-acesso). O Django lê o `.env` automaticamente; não é necessário exportar o arquivo no shell.
+Esses valores de banco são apenas para desenvolvimento local. Use `127.0.0.1`, e não `localhost`: no Windows, `localhost` tenta primeiro o IPv6, que o Docker não publica, e cada conexão leva 20 segundos para desistir dele, o que deixa o `migrate` com cara de travado e cada tela lenta. Preencha também os dados de Keycloak descritos em [Login e primeiro acesso](#login-e-primeiro-acesso). O Django lê o `.env` automaticamente; não é necessário exportar o arquivo no shell.
 
 ### 3. Subir o banco e preparar os dados
 
@@ -379,7 +379,8 @@ O modelo completo está em [`api-sgcas/.env.example`](api-sgcas/.env.example).
 | `PII_ENCRYPTION_KEY`, `PII_HMAC_KEY` | Duas chaves **diferentes** de 32 bytes em base64: cifragem e índice de busca. A API confere no boot e não sobe com chave ausente, inválida ou repetida |
 | `PRECADASTRO_ENABLED` | Ativa integração de pré-cadastro no Tefé Cidadão |
 | `PRECADASTRO_CLIENT_ID`, `PRECADASTRO_CLIENT_SECRET` | Conta de serviço dessa integração |
-| `SGCAS_API_URL` | Destino do proxy Next.js; padrão `http://localhost:8000` |
+| `SGCAS_API_URL` | Destino do proxy Next.js; padrão `http://127.0.0.1:8000` |
+| `SGCAS_DEV_ORIGINS` | Só em desenvolvimento (`npm run dev`): outros nomes ou IPs pelos quais o front é aberto, sem `http://` nem porta, separados por vírgula (por exemplo, `192.168.0.10`). As escritas também precisam da origem em `CSRF_TRUSTED_ORIGINS_EXTRAS` |
 
 Para usar outra API no desenvolvimento:
 
@@ -526,6 +527,7 @@ python manage.py completar_eliminacao_lgpd             # apaga, e não há volta
 | Sintoma | O que conferir |
 | --- | --- |
 | Conexão recusada em `5434` | Suba o banco com `compose.dev.yml` e confira `POSTGRES_PORT` |
+| Cada tela ou comando leva uns 20 segundos (Windows) | Troque `localhost` por `127.0.0.1` em `DATABASE_URL` |
 | Autenticação do PostgreSQL falha | Senha de `DATABASE_URL` e `POSTGRES_PASSWORD`; mudar `.env` não altera a senha de um volume já inicializado |
 | Relação/coluna inexistente | Execute `python manage.py migrate` no banco correto |
 | API retorna `400` | Confira `ALLOWED_HOSTS`: ele precisa conter o host de `SGCAS_API_URL` (o Next troca o `Host`), não o domínio público |
