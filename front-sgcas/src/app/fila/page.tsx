@@ -641,6 +641,10 @@ export default function FilaPage() {
                   </div>
                 </div>
 
+                {/* Com a janela aberta, a mensagem é o erro da ação feita nela (o sucesso fecha a
+                    janela). Fora dela, ficaria atrás do fundo escurecido, sem ninguém ver. */}
+                {mensagem && <div className="notice" role="alert">{mensagem}</div>}
+
                 {modoModal === "inicio" && (
                   <div className="grid gap-4">
                     <RegistroGuiado
