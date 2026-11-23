@@ -7,8 +7,7 @@ import { ArrowRight, CheckCircle2, Clock3, Loader2, LockKeyhole, ShieldCheck } f
 import { loginWithTefeCidadao } from "@/lib/api";
 import { defaultRouteForRole, useAuth } from "@/lib/auth";
 
-// A tela de entrada usa a paleta do seu desenho (índigo #2c37e2 e os cinzas originais) com
-// valores fixos, e não as cores do tema: assim ela não muda quando o tema do sistema mudar.
+// Identidade visual local com os diagnósticos de autenticação da branch desenvolvimento.
 
 // Avise quem mantém o servidor: a conta está certa, o defeito é de configuração ou de rede.
 const AVISE = "Sua conta não tem problema. Avise quem mantém o servidor e informe o código abaixo.";
@@ -90,7 +89,7 @@ export default function LoginPage() {
     <Suspense
       fallback={
         <div className="flex min-h-screen items-center justify-center bg-[#F7F8FA] p-4">
-          <Loader2 className="h-8 w-8 animate-spin text-[#2c37e2] motion-reduce:animate-none" role="status" aria-label="Carregando" />
+          <Loader2 className="h-8 w-8 animate-spin text-primary motion-reduce:animate-none" role="status" aria-label="Carregando" />
         </div>
       }
     >
@@ -129,8 +128,8 @@ function LoginContent() {
   return (
     <main className="min-h-screen bg-[#F7F8FA] text-[#1C2B33]">
       <div className="grid min-h-screen lg:grid-cols-[1.05fr_0.95fr]">
-        <section className="relative hidden overflow-hidden bg-[#0e1e51] px-12 py-10 text-white lg:flex lg:flex-col lg:justify-between xl:px-16">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(96,165,250,0.26),transparent_28%),radial-gradient(circle_at_84%_72%,rgba(147,197,253,0.18),transparent_30%),linear-gradient(135deg,#0e1e51_0%,#1e2993_60%,#2238ae_100%)]" />
+        <section className="relative hidden overflow-hidden bg-[#061f43] px-12 py-10 text-white lg:flex lg:flex-col lg:justify-between xl:px-16">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(96,165,250,0.26),transparent_28%),radial-gradient(circle_at_84%_72%,rgba(147,197,253,0.18),transparent_30%),linear-gradient(135deg,rgba(6,31,67,0.98)_0%,rgba(13,68,150,0.92)_58%,rgba(16,91,190,0.84)_100%)]" />
           <div className="absolute inset-x-12 bottom-24 h-px bg-white/10" />
 
           <div className="relative flex items-center gap-3">
@@ -174,7 +173,7 @@ function LoginContent() {
         <section className="flex items-center justify-center px-5 py-8 sm:px-8">
           <div className="w-full max-w-[430px]">
             <div className="mb-10 flex items-center gap-3 lg:hidden">
-              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#2c37e2] text-white">
+              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary text-white">
                 <ShieldCheck className="h-5 w-5" aria-hidden="true" />
               </div>
               <div>
@@ -183,9 +182,9 @@ function LoginContent() {
               </div>
             </div>
 
-            <div className="rounded-lg border border-[#DEE3E9] bg-white p-6 shadow-[0_24px_60px_-38px_rgba(30,38,160,0.34)] sm:p-8">
+            <div className="rounded-lg border border-[#DEE3E9] bg-white p-6 shadow-[0_24px_60px_-38px_rgba(14,77,157,0.34)] sm:p-8">
               <div className="mb-8 space-y-3">
-                <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-[#2c37e2]/10 text-[#2c37e2]">
+                <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <ShieldCheck className="h-7 w-7" aria-hidden="true" />
                 </div>
                 <div>
@@ -206,7 +205,7 @@ function LoginContent() {
 
               <button
                 type="button"
-                className="inline-flex h-12 w-full items-center justify-between whitespace-nowrap rounded-full bg-[#2c37e2] px-4 text-sm font-semibold tracking-tight text-white shadow-[0_16px_32px_-22px_rgba(30,38,170,0.9)] transition-all duration-200 hover:bg-[#2430c4] active:scale-[0.97] disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-[#DEE3E9] disabled:text-[#5D6C7B]/60 motion-reduce:transition-none motion-reduce:active:scale-100"
+                className="inline-flex h-12 w-full items-center justify-between whitespace-nowrap rounded-full bg-primary px-4 text-sm font-semibold tracking-tight text-white shadow-[0_16px_32px_-22px_rgba(14,77,157,0.9)] transition-all duration-200 hover:bg-primary-hover active:scale-[0.97] disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-[#DEE3E9] disabled:text-[#5D6C7B]/60 motion-reduce:transition-none motion-reduce:active:scale-100"
                 onClick={handleLogin}
                 disabled={entering || loading}
               >

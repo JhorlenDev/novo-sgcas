@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --background: 220 20% 97%;
+    --background: 0 0% 100%;
     --foreground: 201 29% 15%;
 
     --card: 0 0% 100%;
@@ -13,37 +13,37 @@
     --popover: 0 0% 100%;
     --popover-foreground: 201 29% 15%;
 
-    /* Azul institucional: contraste de 8:1 com branco. */
-    --primary: 213 77% 34%;
+    /* Paleta do frontend local. */
+    --primary: 213 100% 44%;
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 213 78% 27%;
-    --primary-pressed: 213 80% 21%;
+    --primary-hover: 218 100% 36%;
+    --primary-pressed: 216 100% 36%;
 
-    --secondary: 213 22% 94%;
+    --secondary: 210 27% 96%;
     --secondary-foreground: 201 29% 15%;
 
     --muted: 216 20% 97%;
-    --muted-foreground: 211 19% 40%;
+    --muted-foreground: 210 14% 42%;
 
-    --accent: 213 55% 94%;
-    --accent-foreground: 213 77% 34%;
+    --accent: 214 100% 95%;
+    --accent-foreground: 213 100% 44%;
 
-    --destructive: 351 80% 38%;
+    --destructive: 351 90% 41%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 142 70% 24%;
+    --success: 136 100% 25%;
     --success-foreground: 0 0% 100%;
 
     --warning: 40 93% 56%;
     --warning-foreground: 201 29% 15%;
 
-    --border: 211 21% 88%;
-    --input: 211 18% 76%;
-    --ring: 213 77% 40%;
+    --border: 213 22% 89%;
+    --input: 213 22% 89%;
+    --ring: 213 100% 44%;
 
     --radius: 0.5rem;
-    --radius-card: 0.625rem;
-    --radius-feature: 0.625rem;
+    --radius-card: 1.25rem;
+    --radius-feature: 1.5rem;
   }
 
   * {
@@ -59,7 +59,7 @@
 
   body {
     @apply bg-meta-warm-gray text-foreground antialiased;
-    font-family: var(--font-public-sans), 'Public Sans', 'Noto Sans', 'Helvetica', 'Arial', sans-serif;
+    font-family: var(--font-nunito), 'Nunito', 'Noto Sans', 'Helvetica', 'Arial', sans-serif;
     font-size: 0.9375rem;
     line-height: 1.55;
   }
@@ -67,7 +67,7 @@
   h1,
   h2,
   h3 {
-    @apply font-semibold tracking-tight text-meta-charcoal;
+    @apply font-medium tracking-tight text-meta-charcoal;
     text-wrap: balance;
   }
 
@@ -98,6 +98,12 @@
 }
 
 @layer utilities {
+  .frosted-nav {
+    background-color: rgba(241, 244, 247, 0.8);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+
   .shadow-elevated {
     box-shadow: 0 16px 40px -8px rgba(16, 24, 40, 0.22), 0 2px 6px 0 rgba(16, 24, 40, 0.08);
   }
@@ -145,7 +151,7 @@
   }
 
   .card {
-    @apply rounded-card border border-meta-divider bg-white p-4 text-meta-charcoal sm:p-5;
+    @apply rounded-card border border-meta-divider bg-white p-4 text-meta-charcoal shadow-lift sm:p-5;
   }
 
   .card h1 {
@@ -164,13 +170,13 @@
     @apply w-full max-w-xl;
   }
 
-  /* Botões: retangulares com canto suave, 44 px de altura no toque e 40 px com mouse. */
+  /* Botões arredondados do design local, preservando os alvos de toque. */
   .button {
-    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-transparent bg-primary px-4 py-2 text-sm font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary-hover active:bg-primary-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 md:min-h-10;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-pill border border-transparent bg-primary px-4 py-2 text-sm font-semibold leading-tight text-primary-foreground transition-colors hover:bg-primary-hover active:bg-primary-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 md:min-h-10;
   }
 
   .button.secondary {
-    @apply border-meta-divider bg-white text-meta-charcoal hover:bg-meta-soft-gray active:bg-meta-divider;
+    @apply border-transparent bg-meta-soft-gray text-meta-charcoal hover:bg-meta-divider active:bg-meta-divider;
   }
 
   .button.danger {
@@ -216,11 +222,11 @@
   }
 
   .page-header h1 {
-    @apply text-2xl md:text-[1.75rem] md:leading-9;
+    @apply text-[32px] font-medium leading-[1.15] md:text-[36px];
   }
 
   .page-header p {
-    @apply mt-1 max-w-2xl text-sm leading-6 text-meta-slate;
+    @apply mt-2 max-w-2xl text-[15px] leading-relaxed text-meta-slate;
   }
 
   .page-action {

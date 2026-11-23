@@ -11,7 +11,7 @@ import {
   ConciergeBell,
   FolderOpen,
   HeartHandshake,
-  Landmark,
+  Shield,
   LayoutDashboard,
   LogOut,
   MapPinned,
@@ -164,7 +164,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       />
 
       <div className={cn("transition-[padding] duration-200", recolhido ? "lg:pl-[4.5rem]" : "lg:pl-64")}>
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-meta-divider bg-white px-3 sm:gap-3 sm:px-4 lg:px-8">
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-meta-divider frosted-nav px-3 sm:gap-3 sm:px-4 lg:px-8">
           <BotaoDoMenu rotulo="Abrir menu" onClick={() => setGavetaAberta(true)} className="lg:hidden" />
 
           {/* Celular e tablet: o título da tela, com a unidade logo abaixo. */}
@@ -336,8 +336,8 @@ function BotaoDoMenu({ rotulo, onClick, className }: { rotulo: string; onClick: 
 function Marca({ href, compacta = false, onNavegar }: { href: string; compacta?: boolean; onNavegar?: () => void }) {
   return (
     <Link href={href} onClick={onNavegar} className="flex min-w-0 items-center gap-3 rounded-lg" title="SGCAS — início">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-        <Landmark className="h-[18px] w-[18px]" aria-hidden="true" />
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-primary text-primary-foreground">
+        <Shield className="h-[18px] w-[18px]" aria-hidden="true" />
       </span>
       <span className={cn("min-w-0", compacta && "sr-only")}>
         <span className="block text-[15px] font-bold leading-tight tracking-tight text-meta-charcoal">SGCAS</span>
@@ -386,13 +386,12 @@ function Navegacao({
                     aria-current={ativo ? "page" : undefined}
                     title={selo ? `${item.label} — ${selo} pendente(s)` : item.label}
                     className={cn(
-                      "relative flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors lg:min-h-10",
+                      "relative flex min-h-11 items-center gap-3 rounded-pill px-4 py-2.5 text-[15px] font-medium tracking-tight transition-colors",
                       compacta && "justify-center px-0",
-                      ativo ? "bg-accent font-semibold text-primary" : "text-meta-charcoal hover:bg-meta-soft-gray",
+                      ativo ? "bg-primary text-primary-foreground shadow-lift" : "text-meta-charcoal hover:bg-meta-soft-gray",
                     )}
                   >
-                    {ativo && !compacta && <span className="absolute inset-y-2 left-0 w-1 rounded-r bg-primary" aria-hidden="true" />}
-                    <item.icon className={cn("h-[18px] w-[18px] shrink-0", ativo ? "text-primary" : "text-meta-slate")} aria-hidden="true" />
+                    <item.icon className={cn("h-[18px] w-[18px] shrink-0", ativo ? "text-primary-foreground" : "text-meta-slate")} aria-hidden="true" />
                     <span className={cn("min-w-0 flex-1 truncate", compacta && "sr-only")}>{item.label}</span>
                     {selo > 0 && (
                       <span
