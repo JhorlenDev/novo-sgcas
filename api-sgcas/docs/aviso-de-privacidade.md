@@ -3,14 +3,12 @@
 ## 1. Controlador
 
 Prefeitura Municipal de Tefé
-CNPJ: [XX.XXX.XXX/XXXX-XX]
-Endereço: [ENDEREÇO COMPLETO]
+CNPJ: 04.426.383/0001-15
+Endereço: Rua Olavo Bilac, 500, Tefé – AM, CEP 69470-000
 
 ## 2. Encarregado de Dados (DPO)
 
-Nome: [NOME DO DPO]
-Email: [EMAIL DO DPO]
-Telefone: [TELEFONE DO DPO]
+O Encarregado pelo tratamento de dados pessoais será designado pela Prefeitura Municipal de Tefé, e seu nome e contato serão publicados aqui. Até lá, dúvidas e pedidos sobre os dados podem ser feitos na sede da Prefeitura, na Rua Olavo Bilac, 500, Tefé – AM, CEP 69470-000.
 
 ## 3. Dados Tratados
 

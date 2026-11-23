@@ -1,5 +1,7 @@
 "use client";
 
+import { CONTROLADOR, ENCARREGADO } from "@/lib/controlador";
+
 export function TermoLGPD() {
   return (
     <div className="space-y-5 text-sm leading-relaxed text-meta-charcoal">
@@ -8,9 +10,8 @@ export function TermoLGPD() {
       <section>
         <h4 className="font-semibold">1. Controlador dos Dados</h4>
         <p>
-          Prefeitura Municipal de Tefé, inscrita no CNPJ sob o nº
-          [XX.XXX.XXX/XXXX-XX], com sede em [ENDEREÇO COMPLETO],
-          doravante denominada &quot;Controlador&quot;.
+          {CONTROLADOR.nome}, inscrita no CNPJ sob o nº {CONTROLADOR.cnpj}, com sede
+          na {CONTROLADOR.endereco}, doravante denominada &quot;Controlador&quot;.
         </p>
       </section>
 
@@ -91,12 +92,20 @@ export function TermoLGPD() {
 
       <section>
         <h4 className="font-semibold">9. Encarregado de Dados (DPO)</h4>
-        <p>
-          Em caso de dúvidas, entre em contato com nosso Encarregado:<br />
-          Nome: [NOME DO DPO]<br />
-          E-mail: [EMAIL DO DPO]<br />
-          Telefone: [TELEFONE DO DPO]
-        </p>
+        {ENCARREGADO ? (
+          <p>
+            Em caso de dúvidas, entre em contato com nosso Encarregado:<br />
+            Nome: {ENCARREGADO.nome}<br />
+            E-mail: {ENCARREGADO.email}<br />
+            Telefone: {ENCARREGADO.telefone}
+          </p>
+        ) : (
+          <p>
+            O Encarregado pelo tratamento de dados pessoais será designado pela {CONTROLADOR.nome}, e
+            seu nome e contato serão publicados aqui. Até lá, dúvidas e pedidos sobre os seus dados
+            podem ser feitos na sede da Prefeitura, na {CONTROLADOR.endereco}.
+          </p>
+        )}
       </section>
 
       <section>
