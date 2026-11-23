@@ -21,11 +21,40 @@ from apps.institucional.serializers import TIPOS_DE_AUXILIO
 CATEGORIAS_CITADAS = {s[2] for _, _, _, servicos in CATALOGO for s in servicos if s[2]}
 SERVICOS_SEM_CATEGORIA = sum(1 for _, _, _, servicos in CATALOGO for s in servicos if s[2] is None)
 
+# Escritos à mão, e não lidos do CATALOGO: tirar um CRAS do catálogo por engano tem de quebrar.
+CRAS = ('CRAS-C', 'CRAS-N', 'CRAS-S', 'CRAS-A')
+
 
 def rodar() -> str:
     saida = StringIO()
     call_command('cadastrar_servicos', stdout=saida)
     return saida.getvalue()
+
+
+class CrasIIAbial(TestCase):
+    def test_e_criado_como_cras_da_secretaria(self):
+        rodar()
+        abial = Unidade.objects.get(sigla='CRAS-A')
+        self.assertEqual(abial.nome, 'CRAS II Abial')
+        self.assertEqual(abial.tipo, 'CRAS')
+        self.assertEqual(abial.nome_qualificado(), 'SEMAS/CRAS II Abial')
+
+    def test_oferta_os_mesmos_servicos_dos_outros_cras(self):
+        rodar()
+        def servicos(sigla):
+            return set(Servico.objects.filter(unidade__sigla=sigla).values_list('nome', 'demanda__nome', 'tipo_de_beneficio'))
+        self.assertEqual(servicos('CRAS-A'), servicos('CRAS-C'))
+
+    def test_chega_num_banco_que_ja_tinha_os_outros_cras(self):
+        # Caso da produção: o comando já rodou antes de o Abial existir no catálogo.
+        rodar()
+        Servico.objects.filter(unidade__sigla='CRAS-A').delete()
+        Unidade.objects.filter(sigla='CRAS-A').delete()
+        unidades_antes = Unidade.objects.count()
+        saida = rodar()
+        self.assertIn('unidade criada: CRAS II Abial', saida)
+        self.assertEqual(Unidade.objects.count(), unidades_antes + 1)
+        self.assertEqual(Servico.objects.filter(unidade__sigla='CRAS-A').count(), len(CATALOGO[0][3]))
 
 
 class RodarDeNovoNaoQuebraNemDuplica(TestCase):
@@ -145,7 +174,7 @@ class AuxiliosSaemProntos(TestCase):
 
     def test_cada_cras_tem_os_quatro_auxilios_com_categoria_e_tipo(self):
         rodar()
-        for sigla in ('CRAS-C', 'CRAS-N', 'CRAS-S'):
+        for sigla in CRAS:
             servicos = {
                 s.nome: s for s in Servico.objects.filter(unidade__sigla=sigla, demanda__nome='Benefício Eventual')
             }
@@ -174,7 +203,7 @@ class AuxiliosSaemProntos(TestCase):
     def test_o_controle_de_repeticao_ja_enxerga_os_auxilios_do_catalogo(self):
         # Sem categoria e tipo o balcão não avisaria de nada: o catálogo tem de deixar isto ligado.
         rodar()
-        for sigla in ('CRAS-C', 'CRAS-N', 'CRAS-S'):
+        for sigla in CRAS:
             servico = Servico.objects.select_related('demanda').get(unidade__sigla=sigla, nome='Auxílio maternidade')
             self.assertEqual(servico.demanda.nome, 'Benefício Eventual')
 

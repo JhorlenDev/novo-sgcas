@@ -5,19 +5,21 @@ import Link from "next/link";
 import { ConciergeBell, FolderOpen, Users } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge, Card, EmptyState, PageHeader, SectionHeading, Stat } from "@/components/ui";
-import { api } from "@/lib/api";
+import { avisoDeCarga, lerOuPadrao } from "@/lib/api";
 import { rotuloSituacao, tomDoCaso } from "@/lib/casos";
 import type { Caso, Senha } from "@/types/sgcas";
 
 export default function DashboardPage() {
   const [fila, setFila] = useState<Senha[]>([]);
   const [casos, setCasos] = useState<Caso[]>([]);
+  const [erroCarga, setErroCarga] = useState("");
 
   useEffect(() => {
+    const falhas: string[] = [];
     void Promise.all([
-      api<Senha[]>("/queues/").then(setFila).catch(() => setFila([])),
-      api<Caso[]>("/cases/").then(setCasos).catch(() => setCasos([])),
-    ]);
+      lerOuPadrao<Senha[]>("/queues/", [], () => falhas.push("a fila")).then(setFila),
+      lerOuPadrao<Caso[]>("/cases/", [], () => falhas.push("os casos")).then(setCasos),
+    ]).then(() => setErroCarga(avisoDeCarga(falhas)));
   }, []);
 
   return (
@@ -32,6 +34,8 @@ export default function DashboardPage() {
           </Link>
         }
       />
+
+      {erroCarga && <div className="notice mb-4" role="alert">{erroCarga}</div>}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Stat

@@ -104,7 +104,43 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
   return data as T;
 }
 
+/**
+ * Leitura que não derruba a tela: se falhar, devolve `padrao`.
+ *
+ * Antes, cada tela fazia `.catch(() => [])`, e uma falha de rede, um erro do servidor
+ * ou uma rota errada viravam uma lista vazia, igual a "não há nada". Agora a falha é
+ * passada a `aoFalhar`, para a tela avisar. Duas respostas continuam silenciosas:
+ * 403, porque é o perfil que não vê aquele dado (o coordenador abre Usuários, mas os
+ * pedidos de acesso são só do administrador), e 401, que o `api` já leva ao login.
+ */
+export async function lerOuPadrao<T>(
+  caminho: string,
+  padrao: T,
+  aoFalhar: (erro: unknown) => void,
+): Promise<T> {
+  try {
+    return await api<T>(caminho);
+  } catch (erro) {
+    if (!(erro instanceof ApiError && (erro.status === 401 || erro.status === 403))) {
+      aoFalhar(erro);
+    }
+    return padrao;
+  }
+}
+
+/** O aviso de uma carga que falhou, dizendo o quê: "os casos" ou "as unidades e os serviços". */
+export function avisoDeCarga(oQueFalhou: string[]): string {
+  if (oQueFalhou.length === 0) return "";
+  const lista = oQueFalhou.length === 1
+    ? oQueFalhou[0]
+    : `${oQueFalhou.slice(0, -1).join(", ")} e ${oQueFalhou[oQueFalhou.length - 1]}`;
+  return `Não foi possível carregar ${lista}. Atualize a página para tentar de novo.`;
+}
+
 export function loginWithTefeCidadao() {
   clearLogoutMarker();
+  // Navegação completa de propósito: é a rota da API que redireciona ao Tefé Cidadão,
+  // não uma página do Next, e o roteador do Next não a alcançaria.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
   window.location.href = "/api/auth/keycloak/login";
 }

@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge, Button, Card, DadosEmLista, EmptyState, Field, PageHeader, SecondaryButton, SectionHeading, Select, Stat } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, avisoDeCarga, lerOuPadrao } from "@/lib/api";
 import { rotuloPrioridade, rotuloSituacao, tomDaPrioridade, tomDoCaso } from "@/lib/casos";
 import { formatarData, formatarDataHora } from "@/lib/datas";
 import type { AcaoItinerante, Caso } from "@/types/sgcas";
@@ -27,6 +27,8 @@ export default function CasosPage() {
   const [acaoSelecionada, setAcaoSelecionada] = useState("");
   const [casoSelecionado, setCasoSelecionado] = useState<Caso | null>(null);
   const [mensagem, setMensagem] = useState("");
+  const [erroCarga, setErroCarga] = useState("");
+  const [erroAcoes, setErroAcoes] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [conclusao, setConclusao] = useState<{ situacao: FormDataEntryValue | null; relato: FormDataEntryValue | null } | null>(null);
@@ -36,17 +38,29 @@ export default function CasosPage() {
     if (origem !== "todos") params.set("origem", origem);
     if (acaoSelecionada) params.set("acao_itinerante", acaoSelecionada);
     const query = params.toString();
-    const data = await api<Caso[]>(`/cases/${query ? `?${query}` : ""}`).catch(() => []);
+    const falhas: string[] = [];
+    const data = await lerOuPadrao<Caso[]>(`/cases/${query ? `?${query}` : ""}`, [], () => falhas.push("os acompanhamentos"));
     setCasos(data);
+    setErroCarga(avisoDeCarga(falhas));
   }, [acaoSelecionada, origem]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void carregar();
-      void api<AcaoItinerante[]>("/acoes-itinerantes/?compacto=1").then(setAcoes).catch(() => setAcoes([]));
     }, 0);
     return () => window.clearTimeout(timer);
   }, [carregar]);
+
+  // As ações do filtro não dependem dele: carregam uma vez. A recepção não vê as ações
+  // itinerantes (403) e fica só com "Todas as ações", em silêncio.
+  useEffect(() => {
+    const falhas: string[] = [];
+    void lerOuPadrao<AcaoItinerante[]>("/itinerant-actions/?compacto=1", [], () => falhas.push("as ações itinerantes do filtro"))
+      .then((lista) => {
+        setAcoes(lista);
+        setErroAcoes(avisoDeCarga(falhas));
+      });
+  }, []);
 
   function alterarOrigem(valor: OrigemFiltro) {
     setOrigem(valor);
@@ -101,6 +115,8 @@ export default function CasosPage() {
         description="Consulte o caso, veja em que etapa ele está e registre o desfecho quando o atendimento terminar."
       />
 
+      {erroCarga && <div className="notice mb-4" role="alert">{erroCarga}</div>}
+      {erroAcoes && <div className="notice mb-4" role="alert">{erroAcoes}</div>}
       {mensagem && <div className="notice mb-4" role="status">{mensagem}</div>}
 
       <div className="grid gap-4 sm:grid-cols-3">

@@ -10,7 +10,7 @@ import uuid
 
 from django.utils import timezone
 
-from apps.atendimentos.models import Aviso, Encaminhamento
+from apps.atendimentos.models import Aviso
 from apps.contas.models import Operador
 from testes.test_encaminhamento_ciclo import _Ciclo
 from testes.test_encaminhamento_ficha import _SEM
@@ -79,7 +79,6 @@ class CaixaDeRecebidos(_Caixa):
     def test_o_mais_urgente_vem_primeiro(self):
         # Dois encaminhamentos para o Centro: a urgente chega depois e passa na frente.
         self.enviar(urgencia='NORMAL')
-        from apps.atendimentos.models import Caso
         from apps.cidadaos.models import Cidadao
         agora = timezone.now()
         outro = Cidadao.objects.create(id=str(uuid.uuid4()), nome='Outra Pessoa', criado_em=agora, atualizado_em=agora)

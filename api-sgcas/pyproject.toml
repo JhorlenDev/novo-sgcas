@@ -1,0 +1,12 @@
+# Configuração das ferramentas da API. As dependências continuam em requirements.txt.
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = ["apps/*/migrations"]
+
+[tool.ruff.lint]
+# Só regras que pegam erro de verdade, não estilo:
+# E9 (código que nem compila), F (pyflakes: nome indefinido, import sem uso, variável
+# esquecida) e B (bugbear: padrões que costumam ser bug, como argumento padrão mutável).
+select = ["E9", "F", "B"]

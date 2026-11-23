@@ -6,7 +6,8 @@ quem o investiga não sabe qual das exigências falhou. Aqui cada uma é testada
 sai em português, com o caminho no console do Keycloak.
 
 Só lê: não cria, não altera e não concede nada. Não imprime o segredo do client, o token
-nem dados de pessoas (conta quantos administradores existem, não quem são).
+nem dados de pessoas: conta quantos administradores existem, e só diz quem são (usuário e
+nome, nunca o e-mail) com `--mostrar-admins`.
 """
 from __future__ import annotations
 
@@ -42,9 +43,16 @@ def _casa(padrao: str, endereco: str) -> bool:
 class Command(BaseCommand):
     help = 'Confere se o Tefé Cidadão (Keycloak) está configurado como o SGCAS exige.'
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--mostrar-admins', action='store_true',
+            help='Lista quem tem o papel ADMIN (usuário e nome, sem e-mail), e não só quantos são.',
+        )
+
     def handle(self, *args, **opcoes):
         self.falhas = 0
         self.avisos = 0
+        self.mostrar_admins = opcoes.get('mostrar_admins', False)
 
         self.stdout.write(
             f'Tefé Cidadão: {settings.KEYCLOAK_URL} · realm "{settings.KEYCLOAK_REALM}" · '
@@ -309,18 +317,75 @@ class Command(BaseCommand):
         return existentes
 
     def _quem_e_admin(self, cabecalho, uuid):
-        resposta = requests.get(
-            f'{keycloak._base_admin()}/clients/{uuid}/roles/{Papel.ADMIN}/users',
-            headers=cabecalho, params={'max': 100}, timeout=TEMPO_LIMITE,
-        )
+        """
+        Quantas pessoas conseguem entrar como ADMIN: com o papel dado direto ou por um grupo, e com
+        a conta ativa no Keycloak (a desativada não entra). Sem nenhuma, o SGCAS abre sem ninguém
+        para aprovar os acessos, e foi assim que o sistema já ficou trancado; por isso é falha, e
+        o comando não diz "Tudo certo". Com uma só, basta ela perder o acesso para acontecer de novo.
+        """
+        papel = f'{keycloak._base_admin()}/clients/{uuid}/roles/{Papel.ADMIN}'
+        resposta = requests.get(f'{papel}/users', headers=cabecalho, params={'max': 100}, timeout=TEMPO_LIMITE)
         if resposta.status_code != 200:
             self._aviso(f'Não consegui ver quem tem o papel ADMIN (HTTP {resposta.status_code}).')
             return
-        quantos = len(_json(resposta) or [])
-        if quantos:
-            self._ok(f'Há {quantos} pessoa(s) com o papel ADMIN.')
-        else:
+        contas = {conta.get('id'): conta for conta in _json(resposta) or [] if isinstance(conta, dict)}
+        origem = {id_da_conta: 'papel direto' for id_da_conta in contas}
+
+        # O endereço acima só lista quem recebeu o papel direto; quem o tem por um grupo vem dos grupos.
+        grupos = requests.get(f'{papel}/groups', headers=cabecalho, params={'max': 100}, timeout=TEMPO_LIMITE)
+        if grupos.status_code != 200:
             self._aviso(
-                'Ainda ninguém tem o papel ADMIN: ninguém conseguirá aprovar acessos. Em Users → (a pessoa) '
-                f'→ Role mapping → Assign role → filtrar por clients → {settings.KEYCLOAK_CLIENT_ID} → ADMIN.'
+                f'Não consegui ver os grupos com o papel ADMIN (HTTP {grupos.status_code}): '
+                'quem recebe ADMIN por grupo não foi contado.'
             )
+        else:
+            for grupo in _json(grupos) or []:
+                membros = requests.get(
+                    f'{keycloak._base_admin()}/groups/{grupo.get("id")}/members',
+                    headers=cabecalho, params={'max': 100}, timeout=TEMPO_LIMITE,
+                )
+                if membros.status_code != 200:
+                    self._aviso(
+                        f'Não consegui ver os membros do grupo "{grupo.get("name")}", que tem o papel ADMIN '
+                        f'(HTTP {membros.status_code}): eles não foram contados.'
+                    )
+                    continue
+                for conta in _json(membros) or []:
+                    if isinstance(conta, dict):
+                        contas.setdefault(conta.get('id'), conta)
+                        origem.setdefault(conta.get('id'), f'grupo "{grupo.get("name")}"')
+
+        ativas = sum(1 for conta in contas.values() if conta.get('enabled', True))
+        desativadas = len(contas) - ativas
+        nota = f' ({desativadas} com a conta desativada no Keycloak, que não entra)' if desativadas else ''
+        como_dar = (
+            f'Em Users → (a pessoa) → Role mapping → Assign role → filtrar por clients → '
+            f'{settings.KEYCLOAK_CLIENT_ID} → ADMIN.'
+        )
+        if self.mostrar_admins:
+            self._listar_admins(contas, origem)
+        if ativas >= 2:
+            self._ok(f'Há {ativas} pessoas com o papel ADMIN e a conta ativa{nota}.')
+        elif ativas == 1:
+            self._aviso(
+                f'Só 1 pessoa tem o papel ADMIN e a conta ativa{nota}. Se ela perder o acesso (saída do '
+                f'cargo, senha, conta bloqueada), ninguém mais aprova acessos. Dê ADMIN a mais alguém. {como_dar}'
+            )
+        else:
+            self._falha(
+                f'Ninguém consegue entrar como ADMIN{nota}: o SGCAS abriria sem ninguém para aprovar os '
+                f'acessos. {como_dar}'
+            )
+
+    def _listar_admins(self, contas, origem):
+        """Quem tem o papel ADMIN: usuário e nome, nunca o e-mail. Só com `--mostrar-admins`."""
+        if not contas:
+            return
+        self.stdout.write('    Quem tem o papel ADMIN:')
+        for id_da_conta, conta in sorted(contas.items(), key=lambda item: (item[1].get('username') or '').lower()):
+            nome = ' '.join(filter(None, (conta.get('firstName'), conta.get('lastName'))))
+            usuario = conta.get('username') or '(sem usuário)'
+            detalhes = [origem.get(id_da_conta, '')]
+            if not conta.get('enabled', True):
+                detalhes.append('CONTA DESATIVADA, não entra')
+            self.stdout.write(f'      · {usuario}{f" ({nome})" if nome else ""} — {", ".join(filter(None, detalhes))}')

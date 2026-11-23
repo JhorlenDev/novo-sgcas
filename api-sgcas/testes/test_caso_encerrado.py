@@ -14,7 +14,7 @@ from django.db import connections
 from django.test import TransactionTestCase
 from django.utils import timezone
 
-from apps.atendimentos import api
+from apps.atendimentos import api_casos
 from apps.atendimentos.models import Caso, Encaminhamento, SenhaDaFila
 from testes.base import CenarioBase
 from testes.test_concluir_caso import _CasoEmAtendimento
@@ -164,10 +164,12 @@ class DuasConclusoesAoMesmoTempo(TransactionTestCase):
         # Força o encontro: as duas chegam à gravação do relato juntas. Sem
         # trava no caso, as duas passam pela checagem de estado e as duas
         # concluem; com a trava, a segunda só lê depois da primeira gravar.
-        gravar = api._acrescentar_ao_relato
+        gravar = api_casos._acrescentar_ao_relato
         encontro = threading.Barrier(2, timeout=1)
+        chamadas = []
 
         def gravar_e_esperar(*args, **kwargs):
+            chamadas.append(args)
             try:
                 encontro.wait()
             except threading.BrokenBarrierError:
@@ -175,13 +177,16 @@ class DuasConclusoesAoMesmoTempo(TransactionTestCase):
             return gravar(*args, **kwargs)
 
         resultados = {}
-        with mock.patch.object(api, '_acrescentar_ao_relato', gravar_e_esperar):
+        with mock.patch.object(api_casos, '_acrescentar_ao_relato', gravar_e_esperar):
             fios = [threading.Thread(target=self._concluir, args=(resultados, i)) for i in range(2)]
             for fio in fios:
                 fio.start()
             for fio in fios:
                 fio.join(timeout=30)
 
+        # Com a trava, a segunda conclusão para no 409 antes de gravar: uma chamada só. Sem
+        # nenhuma, o patch estaria no módulo errado e o teste não forçaria o encontro.
+        self.assertEqual(len(chamadas), 1, 'o patch não alcançou a função que a conclusão usa')
         codigos = sorted(r.status_code for r in resultados.values())
         self.assertEqual(codigos, [200, 409], codigos)
         descricao = Caso.objects.get(pk=self.caso_id).descricao

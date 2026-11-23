@@ -13,7 +13,7 @@ import {
   CamposDeEncaminhamento, FORMULARIO_VAZIO, corpoDoEncaminhamento, validarEncaminhamento,
   type FormularioDeEncaminhamento,
 } from "@/components/encaminhamentos/formulario";
-import { api, mensagemDaApi } from "@/lib/api";
+import { api, avisoDeCarga, lerOuPadrao, mensagemDaApi } from "@/lib/api";
 import { rotuloPrioridade, rotuloSituacao, rotuloSituacaoDaSenha, tomDoCaso } from "@/lib/casos";
 import { formatarData, formatarDataHora } from "@/lib/datas";
 import { rotuloDaSituacao } from "@/lib/encaminhamentos";
@@ -27,6 +27,7 @@ export default function ProntuarioPage() {
   const [unidades, setUnidades] = useState<Unidade[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
+  const [erroUnidades, setErroUnidades] = useState("");
 
   const carregarProntuario = useCallback(async () => {
     const data = await api<ProntuarioCidadao>(`/citizens/${params.id}/prontuario`);
@@ -41,9 +42,12 @@ export default function ProntuarioPage() {
         .catch(() => setErro("Não foi possível carregar o prontuário."))
         .finally(() => setCarregando(false));
 
-      void api<Unidade[]>("/institutional/units")
-        .then(setUnidades)
-        .catch(() => setUnidades([]));
+      const falhas: string[] = [];
+      void lerOuPadrao<Unidade[]>("/institutional/units", [], () => falhas.push("as unidades de destino do encaminhamento"))
+        .then((lista) => {
+          setUnidades(lista);
+          setErroUnidades(avisoDeCarga(falhas));
+        });
     }, 0);
 
     return () => window.clearTimeout(timer);
@@ -76,6 +80,7 @@ export default function ProntuarioPage() {
       />
 
       {erro && <div className="notice mb-4" role="alert">{erro}</div>}
+      {erroUnidades && <div className="notice mb-4" role="alert">{erroUnidades}</div>}
       {carregando && <Card><EmptyState title="Carregando prontuário" text="Buscando cadastro, histórico e registros vinculados." /></Card>}
 
       {prontuario && cidadao && resumo && (

@@ -60,7 +60,11 @@ class KeycloakDeMentira:
                 'clientMappings': {'realm-management': {'mappings': funcoes}},
             }),
             f'{ADMIN}/clients/uuid-do-client/roles': Resposta(200, [{'name': p} for p in PRECEDENCIA]),
-            f'{ADMIN}/clients/uuid-do-client/roles/ADMIN/users': Resposta(200, [{'id': 'um-admin'}]),
+            # Duas pessoas com ADMIN, ativas: com uma só o comando avisa, e sem nenhuma falha.
+            f'{ADMIN}/clients/uuid-do-client/roles/ADMIN/users': Resposta(200, [
+                {'id': 'um-admin', 'enabled': True}, {'id': 'outro-admin', 'enabled': True},
+            ]),
+            f'{ADMIN}/clients/uuid-do-client/roles/ADMIN/groups': Resposta(200, []),
         }
         self.chamadas = []
 
@@ -189,11 +193,81 @@ class VerificarKeycloak(SimpleTestCase):
         self.keycloak.trocar(f'{ADMIN}/clients/uuid-do-client/roles', Resposta(200, []))
         self.assertFalha('ADMIN')
 
-    def test_ninguem_com_admin_e_so_aviso(self):
-        self.keycloak.trocar(f'{ADMIN}/clients/uuid-do-client/roles/ADMIN/users', Resposta(200, []))
+    # ─── quem consegue entrar como ADMIN ───────────────────────────
+    # Sem nenhum, o sistema já ficou trancado em produção: ninguém aprovava os acessos.
+
+    def admins(self, *contas, grupos=()):
+        self.keycloak.trocar(f'{ADMIN}/clients/uuid-do-client/roles/ADMIN/users', Resposta(200, list(contas)))
+        self.keycloak.trocar(f'{ADMIN}/clients/uuid-do-client/roles/ADMIN/groups', Resposta(200, [
+            {'id': gid, 'name': gid} for gid, _ in grupos
+        ]))
+        for gid, membros in grupos:
+            self.keycloak.trocar(f'{ADMIN}/groups/{gid}/members', Resposta(200, list(membros)))
+
+    def test_ninguem_com_admin_e_falha_e_nao_diz_tudo_certo(self):
+        self.admins()
+        saida = self.assertFalha('Ninguém consegue entrar como ADMIN')
+        self.assertNotIn('Tudo certo', saida)
+
+    def test_um_admin_so_e_aviso_para_dar_a_mais_alguem(self):
+        self.admins({'id': 'unico', 'enabled': True})
         saida, erro = self.rodar()
         self.assertIsNone(erro, saida)
-        self.assertIn('ninguém tem o papel ADMIN', saida)
+        self.assertTrue(any('Só 1 pessoa tem o papel ADMIN' in a for a in self.avisos(saida)), saida)
+
+    def test_dois_admins_ativos_passa_sem_aviso(self):
+        saida, erro = self.rodar()
+        self.assertIsNone(erro, saida)
+        self.assertIn('Há 2 pessoas com o papel ADMIN e a conta ativa', saida)
+        self.assertEqual(self.avisos(saida), [])
+
+    def test_admin_com_a_conta_desativada_nao_conta(self):
+        self.admins({'id': 'saiu', 'enabled': False})
+        saida = self.assertFalha('Ninguém consegue entrar como ADMIN')
+        self.assertIn('1 com a conta desativada no Keycloak', saida)
+
+    def test_admin_dado_por_grupo_conta(self):
+        self.admins(grupos=[('gestao', [{'id': 'a', 'enabled': True}, {'id': 'b', 'enabled': True}])])
+        saida, erro = self.rodar()
+        self.assertIsNone(erro, saida)
+        self.assertIn('Há 2 pessoas com o papel ADMIN', saida)
+
+    def test_quem_tem_o_papel_direto_e_pelo_grupo_conta_uma_vez(self):
+        self.admins({'id': 'a', 'enabled': True}, grupos=[('gestao', [{'id': 'a', 'enabled': True}])])
+        saida, erro = self.rodar()
+        self.assertIsNone(erro, saida)
+        self.assertTrue(any('Só 1 pessoa tem o papel ADMIN' in a for a in self.avisos(saida)), saida)
+
+    def equipe(self):
+        self.admins(
+            {'id': '1', 'username': 'jhorlen', 'firstName': 'Jhorlen', 'email': 'jhorlen@exemplo.gov.br', 'enabled': True},
+            {'id': '2', 'username': 'thiago', 'firstName': 'Thiago', 'email': 'thiago@exemplo.gov.br', 'enabled': False},
+            grupos=[('gestao', [{'id': '3', 'username': 'vini', 'firstName': 'Vini', 'enabled': True}])],
+        )
+
+    def test_sem_a_opcao_nao_mostra_quem_sao(self):
+        self.equipe()
+        saida, _ = self.rodar()
+        for usuario in ('jhorlen', 'thiago', 'vini'):
+            self.assertNotIn(usuario, saida)
+
+    def test_com_a_opcao_mostra_usuario_nome_e_origem_mas_nao_o_email(self):
+        self.equipe()
+        saida = StringIO()
+        call_command('verificar_keycloak', mostrar_admins=True, stdout=saida)
+        saida = saida.getvalue()
+        self.assertIn('· jhorlen (Jhorlen) — papel direto', saida)
+        self.assertIn('· thiago (Thiago) — papel direto, CONTA DESATIVADA', saida)
+        self.assertIn('· vini (Vini) — grupo "gestao"', saida)
+        self.assertNotIn('@exemplo.gov.br', saida)
+        self.assertIn('Há 2 pessoas com o papel ADMIN e a conta ativa (1 com a conta desativada', saida)
+
+    def test_grupos_inacessiveis_viram_aviso_e_os_diretos_ainda_contam(self):
+        self.keycloak.trocar(f'{ADMIN}/clients/uuid-do-client/roles/ADMIN/groups', Resposta(403, None))
+        saida, erro = self.rodar()
+        self.assertIsNone(erro, saida)
+        self.assertIn('Há 2 pessoas com o papel ADMIN', saida)
+        self.assertTrue(any('por grupo não foi contado' in a for a in self.avisos(saida)), saida)
 
     def test_rede_fora_nao_derruba_o_comando(self):
         self.keycloak.trocar(

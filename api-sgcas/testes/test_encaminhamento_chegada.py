@@ -13,7 +13,6 @@ from django.utils import timezone
 from apps.atendimentos.models import (
     AtendimentoDeRecepcao, Aviso, Caso, Encaminhamento, SenhaDaFila,
 )
-from apps.contas.models import Operador
 from testes.test_encaminhamentos_caixa import _Caixa
 
 

@@ -156,7 +156,7 @@ novo-sgcas/
     ├── src/lib/              # Cliente HTTP, sessão e utilitários
     ├── src/types/            # Contratos TypeScript
     ├── public/               # Imagens e identidade visual
-    └── scripts/              # Verificações de navegador
+    └── e2e/                  # Testes de navegador (Playwright), com a API simulada
 ```
 
 ## Pré-requisitos
@@ -205,13 +205,13 @@ POSTGRES_USER=sgcas
 POSTGRES_PASSWORD=sgcas_local_dev
 POSTGRES_DB=sgcas
 POSTGRES_PORT=5434
-DATABASE_URL=postgresql://sgcas:sgcas_local_dev@localhost:5434/sgcas
+DATABASE_URL=postgresql://sgcas:sgcas_local_dev@127.0.0.1:5434/sgcas
 FRONTEND_URL=http://localhost:3000
 CORS_ORIGIN=http://localhost:3000
 KEYCLOAK_REDIRECT_URI=http://localhost:3000/api/auth/keycloak/callback
 ```
 
-Esses valores de banco são apenas para desenvolvimento local. Preencha também os dados de Keycloak descritos em [Login e primeiro acesso](#login-e-primeiro-acesso). O Django lê o `.env` automaticamente; não é necessário exportar o arquivo no shell.
+Esses valores de banco são apenas para desenvolvimento local. Use `127.0.0.1`, e não `localhost`: no Windows, `localhost` tenta primeiro o IPv6, que o Docker não publica, e cada conexão leva 20 segundos para desistir dele, o que deixa o `migrate` com cara de travado e cada tela lenta. Preencha também os dados de Keycloak descritos em [Login e primeiro acesso](#login-e-primeiro-acesso). O Django lê o `.env` automaticamente; não é necessário exportar o arquivo no shell.
 
 ### 3. Subir o banco e preparar os dados
 
@@ -229,7 +229,7 @@ O arquivo `compose.dev.yml` expõe o banco **somente em `127.0.0.1:5434`** por p
 
 O comando `cadastrar_servicos` cria/atualiza coordenações, unidades, demandas e serviços do catálogo institucional. Ele é idempotente e não cria contas de acesso nem cidadãos de demonstração.
 
-Os benefícios eventuais dos três CRAS (**Auxílio maternidade**, **Auxílio funeral**, **Cesta básica** e **Auxílio em calamidade pública**) já saem do catálogo com a categoria "Benefício Eventual" e o tipo de auxílio: é isso que liga cada serviço ao aviso de repetição no balcão (e a regra de um ano do auxílio maternidade). As unidades não precisam cadastrar nada para isso valer. Como o comando roda a cada implantação, num serviço que já existe ele só **preenche** a categoria e o tipo quando estão vazios: o que a coordenação decidiu na tela Institucional ("Classificar") não é desfeito. Para incluir outro auxílio em todas as implantações, acrescente-o à lista `AUXILIOS` em `api-sgcas/apps/institucional/management/commands/cadastrar_servicos.py`.
+Nos quatro CRAS (Centro, Norte, Sul e II Abial), os benefícios eventuais (**Auxílio maternidade**, **Auxílio funeral**, **Cesta básica** e **Auxílio em calamidade pública**) já saem do catálogo com a categoria "Benefício Eventual" e o tipo de auxílio: é isso que liga cada serviço ao aviso de repetição no balcão (e a regra de um ano do auxílio maternidade). As unidades não precisam cadastrar nada para isso valer. Como o comando roda a cada implantação, num serviço que já existe ele só **preenche** a categoria e o tipo quando estão vazios: o que a coordenação decidiu na tela Institucional ("Classificar") não é desfeito. Para incluir outro auxílio em todas as implantações, acrescente-o à lista `AUXILIOS` em `api-sgcas/apps/institucional/management/commands/cadastrar_servicos.py`.
 
 ### 4. Subir o frontend
 
@@ -250,6 +250,16 @@ Abra **http://localhost:3000**.
 | PostgreSQL | `127.0.0.1:5434` com o override de desenvolvimento |
 
 Se o Next.js escolher outra porta, ajuste o endereço do frontend e o callback no `.env` e no Keycloak. Prefira liberar a porta `3000` para manter os exemplos consistentes.
+
+### Ver as telas sem o Tefé Cidadão (dados de demonstração)
+
+Sem um Keycloak configurado para `localhost`, o botão de entrada não funciona na sua máquina e as telas internas ficam inacessíveis. Para vê-las, com o `.env` em `DEBUG=True` e o catálogo cadastrado (`cadastrar_servicos`), rode em `api-sgcas/`:
+
+```bash
+python manage.py dados_de_demonstracao
+```
+
+Ele cria um administrador fictício lotado no CRAS Centro, sete cidadãos fictícios e uma fila com uma pessoa já chamada, tudo pela própria API (com as mesmas regras e a mesma cifragem de um cadastro real), e imprime a linha para colar no console do navegador (F12) em `http://localhost:3000/login`, que abre a sessão. Rodar de novo não duplica nada e gera outra sessão; `--so-sessao` só cria a sessão. **Com `DEBUG=False` o comando se recusa a rodar**: em produção ele seria uma entrada sem o Tefé Cidadão.
 
 ### Alternativa: API e banco no Docker
 
@@ -319,7 +329,7 @@ Tudo abaixo é o que o código do SGCAS exige do realm; nada é opcional, exceto
 3. **Papéis do client** (*Clients → sgcas-web → Roles*): crie **com estes nomes exatos** `ADMIN`, `COORDENADOR`, `ASSISTENTE_SOCIAL`, `TECNICO`, `RECEPCIONISTA`, `GESTOR_ACOES_ITINERANTES` e `VISUALIZADOR`. O papel de uma pessoa é o que ela tem **dentro desse client**; o SGCAS não decide papel, só lê.
 4. **Conteúdo do token.** O papel é lido do *access token*, em `resource_access.sgcas-web.roles`, então mantenha no client o escopo `roles` padrão (com o mapeador *client roles* adicionando ao access token). A audiência do token precisa conter `account`, o que ocorre quando a pessoa tem o papel padrão do realm (`default-roles-…`, com as funções de `account`): **não retire essas funções dos operadores**, ou o login falha com "token inválido".
 5. **Contas dos operadores.** Na primeira entrada o SGCAS cria o operador com o nome e o e-mail do token. O e-mail **verificado** só pesa quando já existe um cadastro local sem vínculo com o SSO (de antes do Keycloak): ele só é adotado se o e-mail estiver verificado; do contrário o login volta com `email-nao-confirmado`. Se o e-mail já estiver ligado a *outra* identidade do SSO, volta `conta-em-conflito`.
-6. **Primeiro administrador.** Em *Users → (a pessoa) → Role mapping → Assign role → filtrar por clients → `sgcas-web` → `ADMIN`*, e então entre pelo SGCAS. A partir daí as aprovações e os perfis são feitos na tela **Usuários** do próprio sistema. Quem entra sem papel cai em `/waiting-approval` e vira um pedido de acesso.
+6. **Administradores: pelo menos dois.** Em *Users → (a pessoa) → Role mapping → Assign role → filtrar por clients → `sgcas-web` → `ADMIN`*, e então entre pelo SGCAS. Dê `ADMIN` a duas pessoas, com contas ativas no Keycloak (por exemplo, alguém da secretaria e alguém da SEDECTI): com uma só, basta ela perder o acesso para ninguém mais aprovar os outros, e o sistema fica trancado. Dentro do SGCAS ninguém consegue desativar, rebaixar ou desligar a própria conta, então um administrador nunca tranca o sistema pela tela de Usuários; o risco está no Keycloak. A partir daí as aprovações e os perfis são feitos na tela **Usuários** do próprio sistema. Quem entra sem papel cai em `/waiting-approval` e vira um pedido de acesso.
 7. **Rede.** A API precisa alcançar o SSO por HTTPS (troca do código, chaves públicas e API de administração). O navegador só fala com o domínio do SGCAS.
 8. **Pré-cadastro do cidadão no Tefé Cidadão** (opcional, desligado por padrão): peça à equipe do SSO um client de serviço com permissão de chamar `POST {KEYCLOAK_URL}/realms/{realm}/pre-cadastro` e preencha `PRECADASTRO_ENABLED=true`, `PRECADASTRO_CLIENT_ID` e `PRECADASTRO_CLIENT_SECRET`. Sem isso, o cadastro do cidadão segue funcionando; apenas não cria a conta dele no SSO.
 
@@ -335,7 +345,7 @@ Variáveis da API para o login em produção (veja o modelo em [`api-sgcas/.env.
 | `FRONTEND_URL` | `https://sgcas.tefe.am.gov.br` (a origem pública, com `https`) |
 | `DEBUG` | `False` |
 
-**Confira antes de testar o login.** Com o `.env` preenchido, rode na API `python manage.py verificar_keycloak` (ou `docker compose run --rm api python manage.py verificar_keycloak`). Ele testa cada item acima contra o Tefé Cidadão real (emissor, chaves, client e endereço de retorno, segredo, funções da conta de serviço, os 7 papéis, se alguém já tem `ADMIN`, e opções inseguras do client) e diz em português o que falta. Só lê: não altera nada e não imprime o segredo.
+**Confira antes de testar o login.** Com o `.env` preenchido, rode na API `python manage.py verificar_keycloak` (ou `docker compose run --rm api python manage.py verificar_keycloak`). Ele testa cada item acima contra o Tefé Cidadão real (emissor, chaves, client e endereço de retorno, segredo, funções da conta de serviço, os 7 papéis, quantas pessoas com conta ativa têm `ADMIN`, direto ou por grupo, e opções inseguras do client) e diz em português o que falta. **Sem nenhum administrador ativo, ele falha e não diz "Tudo certo"**; com um só, avisa. Para ver **quem** são os administradores (usuário e nome, sem e-mail), acrescente `--mostrar-admins`; no console do Keycloak, a mesma lista fica em *Clients → sgcas-web → Roles → ADMIN → Users in role*. Só lê: não altera nada e não imprime o segredo.
 
 Como saber se funcionou: abra `https://sgcas.tefe.am.gov.br/login`, clique em **Entrar com Tefé Cidadão**, entre com a conta que recebeu `ADMIN` e confira que cai no Painel. Se voltar para `/login?erro=…`: `estado-invalido` (sessão expirada ou cookies bloqueados), `sem-codigo` (o SSO não devolveu o código), `conta-em-conflito` (o e-mail já pertence a outra conta do SGCAS), `email-nao-confirmado` (item 5). Quando a falha é na conversa com o Tefé Cidadão, o código diz a causa e a tela mostra o motivo e um detalhe técnico (`ref`, o status e o código que o Keycloak devolveu), sem precisar abrir o servidor:
 
@@ -379,7 +389,8 @@ O modelo completo está em [`api-sgcas/.env.example`](api-sgcas/.env.example).
 | `PII_ENCRYPTION_KEY`, `PII_HMAC_KEY` | Duas chaves **diferentes** de 32 bytes em base64: cifragem e índice de busca. A API confere no boot e não sobe com chave ausente, inválida ou repetida |
 | `PRECADASTRO_ENABLED` | Ativa integração de pré-cadastro no Tefé Cidadão |
 | `PRECADASTRO_CLIENT_ID`, `PRECADASTRO_CLIENT_SECRET` | Conta de serviço dessa integração |
-| `SGCAS_API_URL` | Destino do proxy Next.js; padrão `http://localhost:8000` |
+| `SGCAS_API_URL` | Destino do proxy Next.js; padrão `http://127.0.0.1:8000` |
+| `SGCAS_DEV_ORIGINS` | Só em desenvolvimento (`npm run dev`): outros nomes ou IPs pelos quais o front é aberto, sem `http://` nem porta, separados por vírgula (por exemplo, `192.168.0.10`). As escritas também precisam da origem em `CSRF_TRUSTED_ORIGINS_EXTRAS` |
 
 Para usar outra API no desenvolvimento:
 
@@ -398,21 +409,31 @@ Frontend:
 cd front-sgcas
 npm ci
 npm run lint
+npm run typecheck
 npm run build
+npx playwright install chromium   # só na primeira vez
+npm run test:e2e
 ```
+
+`npm run test:e2e` faz o build, sobe o frontend na porta 3100 e abre as telas num navegador, com a API **simulada** em `e2e/apoio.ts`: não precisa de banco, API nem Tefé Cidadão. Cada teste diz o que cada rota responde; a tela que chama uma rota que o teste não simula (uma rota errada, por exemplo) faz o teste falhar. Para usar o Edge já instalado em vez de baixar o Chromium, rode com `PLAYWRIGHT_CHANNEL=msedge`; para testar um servidor que já está no ar, `E2E_URL=http://localhost:3000`.
 
 Backend, com o ambiente virtual ativo e PostgreSQL configurado:
 
 ```bash
 cd api-sgcas
 source .venv/bin/activate
+pip install -r requirements-dev.txt   # ruff, uma vez
+ruff check .
 python manage.py check
+python manage.py makemigrations --check --dry-run
 python manage.py test testes --noinput
 ```
 
+O GitHub roda tudo isso sozinho em todo envio e pull request ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)); veja [Verificação automática](CONTRIBUTING.md#verificação-automática-ci).
+
 O usuário PostgreSQL dos testes precisa poder criar o banco de testes. Use ambiente de desenvolvimento separado da produção. A suíte cobre permissões, escopo por unidade, recepção, histórico, anexos, auditoria e cifragem, entre outros cenários.
 
-Há também scripts de navegador em `front-sgcas/scripts/`. Eles têm requisitos próprios de navegador e servidor; o teste de login depende de credenciais reais e não integra `npm run lint` ou `npm run build`.
+O teste de entrada real pelo Tefé Cidadão (`e2e/login-real.spec.ts`) precisa de um SGCAS no ar e de uma conta de verdade, então fica pulado, a menos que se informe `E2E_URL`, `SGCAS_E2E_EMAIL` e `SGCAS_E2E_SENHA`.
 
 ## Produção
 
@@ -475,7 +496,7 @@ O frontend deve ser mantido por um gerenciador de processos ou plataforma de hos
 ### Antes de abrir para os usuários
 
 1. **Gere um novo *Client secret*** do `sgcas-web` (console do Keycloak: *Clients → sgcas-web → Credentials → Regenerate*) e rode `deploy/gerar-env.sh` com ele. Um segredo que passou por chat, e-mail ou mensagem não deve ir para produção.
-2. No servidor, `docker compose run --rm api python manage.py verificar_keycloak` deve terminar em "Tudo certo" (confere o SSO, o segredo, o endereço de retorno do domínio real, as funções da conta de serviço e os 7 papéis).
+2. No servidor, `docker compose run --rm api python manage.py verificar_keycloak` deve terminar em "Tudo certo", de preferência sem o aviso de administrador único (confere o SSO, o segredo, o endereço de retorno do domínio real, as funções da conta de serviço, os 7 papéis e se há administradores ativos).
 3. `curl -I https://SEU-DOMINIO/api/health` responde `200`; a tela de login abre; **entre com uma conta `ADMIN`** e confira que cai no Painel.
 4. Na tela **Usuários**, lote os devs na unidade **SEDECTI** e aprove os servidores com o perfil e a unidade certos.
 5. O backup agendado rodou pelo menos uma vez e **a restauração foi treinada**. As chaves `PII_*` estão num cofre, fora do servidor.
@@ -521,6 +542,7 @@ python manage.py completar_eliminacao_lgpd             # apaga, e não há volta
 | Sintoma | O que conferir |
 | --- | --- |
 | Conexão recusada em `5434` | Suba o banco com `compose.dev.yml` e confira `POSTGRES_PORT` |
+| Cada tela ou comando leva uns 20 segundos (Windows) | Troque `localhost` por `127.0.0.1` em `DATABASE_URL` |
 | Autenticação do PostgreSQL falha | Senha de `DATABASE_URL` e `POSTGRES_PASSWORD`; mudar `.env` não altera a senha de um volume já inicializado |
 | Relação/coluna inexistente | Execute `python manage.py migrate` no banco correto |
 | API retorna `400` | Confira `ALLOWED_HOSTS`: ele precisa conter o host de `SGCAS_API_URL` (o Next troca o `Host`), não o domínio público |

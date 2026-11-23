@@ -13,7 +13,7 @@ from django.db import connections
 from django.test import TransactionTestCase
 from django.utils import timezone
 
-from apps.atendimentos import api
+from apps.atendimentos import api_recepcao
 from apps.atendimentos.models import SenhaDaFila
 from apps.cidadaos.models import Cidadao
 from testes.base import CenarioBase
@@ -29,36 +29,36 @@ def _senha_avulsa(cenario, numero, prefixo='NR'):
 
 class NumeracaoSequencial(CenarioBase):
     def test_primeira_do_dia_e_001(self):
-        self.assertEqual(api._proxima_senha(self.sul.id, 'NORMAL'), 'NR001')
+        self.assertEqual(api_recepcao._proxima_senha(self.sul.id, 'NORMAL'), 'NR001')
 
     def test_segue_a_ultima_do_dia(self):
         _senha_avulsa(self, 1)
         _senha_avulsa(self, 2)
-        self.assertEqual(api._proxima_senha(self.sul.id, 'NORMAL'), 'NR003')
+        self.assertEqual(api_recepcao._proxima_senha(self.sul.id, 'NORMAL'), 'NR003')
 
     def test_lacuna_nao_reaproveita_numero(self):
         # Contar linhas daria NR002 aqui — e NR002 já existe.
         _senha_avulsa(self, 1)
         _senha_avulsa(self, 2)
         SenhaDaFila.objects.filter(senha='NR001').delete()
-        self.assertEqual(api._proxima_senha(self.sul.id, 'NORMAL'), 'NR003')
+        self.assertEqual(api_recepcao._proxima_senha(self.sul.id, 'NORMAL'), 'NR003')
 
     def test_cada_prioridade_tem_a_propria_sequencia(self):
         _senha_avulsa(self, 1)
-        self.assertEqual(api._proxima_senha(self.sul.id, 'URGENTE'), 'UR001')
-        self.assertEqual(api._proxima_senha(self.sul.id, 'ALTA'), 'PR001')
-        self.assertEqual(api._proxima_senha(self.sul.id, 'BAIXA'), 'BX001')
+        self.assertEqual(api_recepcao._proxima_senha(self.sul.id, 'URGENTE'), 'UR001')
+        self.assertEqual(api_recepcao._proxima_senha(self.sul.id, 'ALTA'), 'PR001')
+        self.assertEqual(api_recepcao._proxima_senha(self.sul.id, 'BAIXA'), 'BX001')
 
     def test_cada_unidade_tem_a_propria_sequencia(self):
         _senha_avulsa(self, 1)
-        self.assertEqual(api._proxima_senha(self.centro.id, 'NORMAL'), 'NR001')
+        self.assertEqual(api_recepcao._proxima_senha(self.centro.id, 'NORMAL'), 'NR001')
 
     def test_ignora_senha_fora_do_formato(self):
         SenhaDaFila.objects.filter(unidade=self.sul).delete()
         _senha_avulsa(self, 5)
         outra = _senha_avulsa(self, 0)
         SenhaDaFila.objects.filter(pk=outra.pk).update(senha='NR-manual')
-        self.assertEqual(api._proxima_senha(self.sul.id, 'NORMAL'), 'NR006')
+        self.assertEqual(api_recepcao._proxima_senha(self.sul.id, 'NORMAL'), 'NR006')
 
 
 class DuasRecepcoesAoMesmoTempo(TransactionTestCase):
@@ -97,10 +97,12 @@ class DuasRecepcoesAoMesmoTempo(TransactionTestCase):
         # uma gravar. Sem trava, as duas saem com NR001. Com a trava, a segunda
         # espera a primeira terminar; o tempo limite só evita que o teste
         # fique preso esperando uma barreira que a trava nunca deixa fechar.
-        calcular = api._proxima_senha
+        calcular = api_recepcao._proxima_senha
         encontro = threading.Barrier(2, timeout=1)
+        chamadas = []
 
         def calcular_e_esperar(unidade_id, prioridade):
+            chamadas.append(unidade_id)
             senha = calcular(unidade_id, prioridade)
             try:
                 encontro.wait()
@@ -109,7 +111,7 @@ class DuasRecepcoesAoMesmoTempo(TransactionTestCase):
             return senha
 
         resultados = {}
-        with mock.patch.object(api, '_proxima_senha', calcular_e_esperar):
+        with mock.patch.object(api_recepcao, '_proxima_senha', calcular_e_esperar):
             pessoas = self._pessoas(2)
             fios = [threading.Thread(target=self._registrar, args=(resultados, i, pessoas[i])) for i in range(2)]
             for fio in fios:
@@ -117,6 +119,8 @@ class DuasRecepcoesAoMesmoTempo(TransactionTestCase):
             for fio in fios:
                 fio.join(timeout=30)
 
+        # Sem isto, um patch no módulo errado deixaria o teste passando sem forçar o encontro.
+        self.assertEqual(len(chamadas), 2, 'o patch não alcançou a função que a recepção usa')
         self.assertEqual({r.status_code for r in resultados.values()}, {201}, resultados)
         senhas = sorted(SenhaDaFila.objects.values_list('senha', flat=True))
         self.assertEqual(senhas, ['NR001', 'NR002'])

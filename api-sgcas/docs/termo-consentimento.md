@@ -4,7 +4,7 @@
 
 ### 1. Controlador dos Dados
 
-Prefeitura Municipal de Tefé, inscrita no CNPJ sob o nº [XX.XXX.XXX/XXXX-XX], com sede em [ENDEREÇO COMPLETO], doravante denominada "Controlador".
+Prefeitura Municipal de Tefé, inscrita no CNPJ sob o nº 04.426.383/0001-15, com sede na Rua Olavo Bilac, 500, Tefé – AM, CEP 69470-000, doravante denominada "Controlador".
 
 ### 2. Dados Coletados
 
@@ -69,11 +69,7 @@ Adotamos medidas técnicas e administrativas para proteger seus dados, incluindo
 
 ### 9. Encarregado de Dados (DPO)
 
-Em caso de dúvidas, entre em contato com nosso Encarregado:
-
-- Nome: [NOME DO DPO]
-- E-mail: [EMAIL DO DPO]
-- Telefone: [TELEFONE DO DPO]
+O Encarregado pelo tratamento de dados pessoais será designado pela Prefeitura Municipal de Tefé, e seu nome e contato serão publicados aqui. Até lá, dúvidas e pedidos sobre os dados podem ser feitos na sede da Prefeitura, na Rua Olavo Bilac, 500, Tefé – AM, CEP 69470-000.
 
 ### 10. Consentimento para Criação de Conta
 
