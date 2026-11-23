@@ -251,6 +251,16 @@ Abra **http://localhost:3000**.
 
 Se o Next.js escolher outra porta, ajuste o endereço do frontend e o callback no `.env` e no Keycloak. Prefira liberar a porta `3000` para manter os exemplos consistentes.
 
+### Ver as telas sem o Tefé Cidadão (dados de demonstração)
+
+Sem um Keycloak configurado para `localhost`, o botão de entrada não funciona na sua máquina e as telas internas ficam inacessíveis. Para vê-las, com o `.env` em `DEBUG=True` e o catálogo cadastrado (`cadastrar_servicos`), rode em `api-sgcas/`:
+
+```bash
+python manage.py dados_de_demonstracao
+```
+
+Ele cria um administrador fictício lotado no CRAS Centro, sete cidadãos fictícios e uma fila com uma pessoa já chamada, tudo pela própria API (com as mesmas regras e a mesma cifragem de um cadastro real), e imprime a linha para colar no console do navegador (F12) em `http://localhost:3000/login`, que abre a sessão. Rodar de novo não duplica nada e gera outra sessão; `--so-sessao` só cria a sessão. **Com `DEBUG=False` o comando se recusa a rodar**: em produção ele seria uma entrada sem o Tefé Cidadão.
+
 ### Alternativa: API e banco no Docker
 
 Prepare o `.env` conforme acima. Em `api-sgcas/`:
