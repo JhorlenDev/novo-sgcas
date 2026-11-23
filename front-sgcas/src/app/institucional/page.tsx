@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, SecondaryButton, SectionHeading, Select } from "@/components/ui";
-import { api, mensagemDaApi } from "@/lib/api";
+import { api, avisoDeCarga, lerOuPadrao, mensagemDaApi } from "@/lib/api";
 import { CATEGORIA_DE_BENEFICIO, TIPOS_DE_AUXILIO } from "@/lib/auxilios";
 import { useAuth } from "@/lib/auth";
 import type { Coordenacao, Demanda, Servico, Unidade } from "@/types/sgcas";
@@ -104,6 +104,7 @@ export default function InstitucionalPage() {
   const [coordenacoes, setCoordenacoes] = useState<Coordenacao[]>([]);
   const [demandas, setDemandas] = useState<Demanda[]>([]);
   const [mensagem, setMensagem] = useState("");
+  const [erroCarga, setErroCarga] = useState("");
   const [modalUnidade, setModalUnidade] = useState(false);
   const [modalServico, setModalServico] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -118,12 +119,14 @@ export default function InstitucionalPage() {
   });
 
   async function carregar() {
+    const falhas: string[] = [];
     const [units, services, coords, demands] = await Promise.all([
-      api<Unidade[]>("/institutional/units").catch(() => []),
-      api<Servico[]>("/institutional/services?unidade=todas").catch(() => []),
-      api<Coordenacao[]>("/institutional/coordinations").catch(() => []),
-      api<Demanda[]>("/institutional/demands").catch(() => []),
+      lerOuPadrao<Unidade[]>("/institutional/units", [], () => falhas.push("as unidades")),
+      lerOuPadrao<Servico[]>("/institutional/services?unidade=todas", [], () => falhas.push("os serviços")),
+      lerOuPadrao<Coordenacao[]>("/institutional/coordinations", [], () => falhas.push("as coordenações")),
+      lerOuPadrao<Demanda[]>("/institutional/demands", [], () => falhas.push("as categorias")),
     ]);
+    setErroCarga(avisoDeCarga(falhas));
 
     setUnidades(units);
     setServicos(services);
@@ -246,6 +249,7 @@ export default function InstitucionalPage() {
         }
       />
 
+      {erroCarga && <div className="notice mb-4" role="alert">{erroCarga}</div>}
       {mensagem && <div className="notice mb-4" role="status">{mensagem}</div>}
 
       <div className="grid gap-4">

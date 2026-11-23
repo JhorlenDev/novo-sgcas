@@ -5,7 +5,7 @@ import { CheckCircle2, Clock3, ShieldAlert, UserCog, UsersRound } from "lucide-r
 import { AppShell } from "@/components/app-shell";
 import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, SectionHeading, Select, Stat } from "@/components/ui";
 import { formatarDataCurta } from "@/lib/datas";
-import { api } from "@/lib/api";
+import { api, avisoDeCarga, lerOuPadrao } from "@/lib/api";
 import type { Operador, Papel, Unidade } from "@/types/sgcas";
 
 type Pedido = {
@@ -31,16 +31,20 @@ export default function AdminPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [unidades, setUnidades] = useState<Unidade[]>([]);
   const [mensagem, setMensagem] = useState("");
+  const [erroCarga, setErroCarga] = useState("");
 
   async function carregar() {
+    const falhas: string[] = [];
     const [users, requests, units] = await Promise.all([
-      api<Operador[]>("/users/").catch(() => []),
-      api<Pedido[]>("/access-requests/").catch(() => []),
-      api<Unidade[]>("/institutional/units").catch(() => []),
+      lerOuPadrao<Operador[]>("/users/", [], () => falhas.push("os operadores")),
+      // O coordenador abre esta tela, mas os pedidos são só do administrador: o 403 fica em silêncio.
+      lerOuPadrao<Pedido[]>("/access-requests/", [], () => falhas.push("os pedidos de acesso")),
+      lerOuPadrao<Unidade[]>("/institutional/units", [], () => falhas.push("as unidades")),
     ]);
     setOperadores(users);
     setPedidos(requests);
     setUnidades(units);
+    setErroCarga(avisoDeCarga(falhas));
   }
 
   useEffect(() => {
@@ -114,6 +118,7 @@ export default function AdminPage() {
         description="Aprove solicitações, defina perfil, vincule unidade e acompanhe operadores cadastrados."
       />
 
+      {erroCarga && <div className="notice mb-4" role="alert">{erroCarga}</div>}
       {mensagem && <div className="notice mb-4" role="status">{mensagem}</div>}
 
       <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">

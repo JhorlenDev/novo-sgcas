@@ -29,7 +29,7 @@ import {
   CamposDeEncaminhamento, FORMULARIO_VAZIO, corpoDoEncaminhamento, validarEncaminhamento,
   type FormularioDeEncaminhamento,
 } from "@/components/encaminhamentos/formulario";
-import { ApiError, api, mensagemDaApi } from "@/lib/api";
+import { api, ApiError, avisoDeCarga, lerOuPadrao, mensagemDaApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { rotuloPrioridade, rotuloSituacao, tomDaPrioridade, tomDoCaso } from "@/lib/casos";
 import { formatarDataCurta } from "@/lib/datas";
@@ -76,6 +76,7 @@ export default function FilaPage() {
   const [chamando, setChamando] = useState(false);
   const chamadaEmCurso = useRef(false);
   const [erroCarga, setErroCarga] = useState("");
+  const [erroUnidades, setErroUnidades] = useState("");
   const [fila, setFila] = useState<Senha[]>([]);
   const [painel, setPainel] = useState<PainelAtendente | null>(null);
   const [atendimento, setAtendimento] = useState<AtendimentoMontado | null>(null);
@@ -114,10 +115,19 @@ export default function FilaPage() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void carregar();
-      void api<Unidade[]>("/institutional/units").then(setUnidades).catch(() => setUnidades([]));
     }, 0);
     return () => window.clearTimeout(timer);
   }, [carregar]);
+
+  // As unidades (destinos do encaminhamento) não mudam com a fila: carregam uma vez.
+  useEffect(() => {
+    const falhas: string[] = [];
+    void lerOuPadrao<Unidade[]>("/institutional/units", [], () => falhas.push("as unidades de destino do encaminhamento"))
+      .then((lista) => {
+        setUnidades(lista);
+        setErroUnidades(avisoDeCarga(falhas));
+      });
+  }, []);
 
   useEffect(() => {
     if (!user || !unidadeId || !podeChamar) return;
@@ -386,6 +396,7 @@ export default function FilaPage() {
         {!unidadeId && <div className="notice">Seu usuário não tem unidade de lotação definida. Solicite o vínculo a um administrador para chamar senhas.</div>}
         {user && !podeChamar && <div className="notice">Seu perfil não tem permissão para chamar senhas.</div>}
         {erroCarga && <div className="notice" role="alert">{erroCarga}</div>}
+        {erroUnidades && <div className="notice" role="alert">{erroUnidades}</div>}
         {mensagem && <div className="notice" role="status">{mensagem}</div>}
       </div>
 
@@ -510,8 +521,8 @@ export default function FilaPage() {
               ) : (
                 atendimento.historico.map((entrada, index) => (
                   <div className="line-row" key={`${entrada.quando}-${index}`}>
-                    <strong>{entrada.o_que}</strong>
-                    <small>{entrada.unidade}{entrada.detalhe ? ` · ${entrada.detalhe}` : ""}</small>
+                    <strong className="block">{entrada.o_que}</strong>
+                    <small className="mt-0.5 block">{entrada.unidade}{entrada.detalhe ? ` · ${entrada.detalhe}` : ""}</small>
                   </div>
                 ))
               )}

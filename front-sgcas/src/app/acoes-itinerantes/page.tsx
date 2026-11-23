@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge, Button, Card, DadosEmLista, EmptyState, Field, Input, PageHeader, SecondaryButton, SectionHeading, Select, Stat } from "@/components/ui";
-import { api, mensagemDaApi } from "@/lib/api";
+import { api, avisoDeCarga, lerOuPadrao, mensagemDaApi } from "@/lib/api";
 import { formatarData } from "@/lib/datas";
 import type {
   AcaoItinerante,
@@ -39,6 +39,7 @@ export default function AcoesItinerantesPage() {
   const [carregando, setCarregando] = useState(true);
   const [ordenacao, setOrdenacao] = useState<Ordenacao>("mais-proximas");
   const [mensagem, setMensagem] = useState("");
+  const [erroCarga, setErroCarga] = useState("");
 
   const [modalNovaAberto, setModalNovaAberto] = useState(false);
   const [erroCadastro, setErroCadastro] = useState("");
@@ -61,12 +62,14 @@ export default function AcoesItinerantesPage() {
   const [excluindo, setExcluindo] = useState(false);
 
   const atualizar = useCallback(async () => {
+    const falhas: string[] = [];
     const [acoesData, resumoData] = await Promise.all([
-      api<AcaoItinerante[]>("/itinerant-actions/").catch(() => []),
-      api<ResumoAcoesItinerantes>("/itinerant-actions/resumo").catch(() => null),
+      lerOuPadrao<AcaoItinerante[]>("/itinerant-actions/", [], () => falhas.push("as ações")),
+      lerOuPadrao<ResumoAcoesItinerantes | null>("/itinerant-actions/resumo", null, () => falhas.push("o resumo")),
     ]);
     setAcoes(acoesData);
     setResumo(resumoData);
+    setErroCarga(avisoDeCarga(falhas));
   }, []);
 
   useEffect(() => {
@@ -198,6 +201,7 @@ export default function AcoesItinerantesPage() {
         }
       />
 
+      {erroCarga && <div className="notice mb-4" role="alert">{erroCarga}</div>}
       {mensagem && <div className="notice mb-4" role="status">{mensagem}</div>}
 
       <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">

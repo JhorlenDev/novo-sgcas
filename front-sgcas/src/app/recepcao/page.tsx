@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -33,6 +33,7 @@ import { AvisoDeDuplicidade, alertasDoErro, justificativaValida, mensagemDeDupli
 import { api, mensagemDaApi } from "@/lib/api";
 import { rotuloPrioridade, rotuloSituacao, rotuloSituacaoDaSenha, tomDaPrioridade, tomDoCaso } from "@/lib/casos";
 import { formatarDataCurta, formatarDataHora } from "@/lib/datas";
+import { useAvisoDeCarga } from "@/lib/use-aviso-de-carga";
 import { formatCPF } from "@/lib/utils";
 import type {
   AlertaDeDuplicidade, AtendimentoRecepcao, Caso, CidadaoLista, EncaminhamentoResumo, EntradaHistorico,
@@ -53,6 +54,10 @@ type ResultadoAtendimento = {
 };
 
 type AcaoAtendimento = "FINALIZADO" | "ENCAMINHADO";
+
+// Nomes das leituras no aviso de falha; os dois da pessoa também trocam o texto do painel.
+const HISTORICO_DA_PESSOA = "o histórico da pessoa";
+const CASOS_DA_PESSOA = "os casos da pessoa";
 type AbaRecepcao = "nova" | "recentes" | "fila";
 
 export default function RecepcaoPage() {
@@ -83,31 +88,36 @@ export default function RecepcaoPage() {
   const [encaminhamentoEscolhido, setEncaminhamentoEscolhido] = useState<string | null>(null);
   const [justificativa, setJustificativa] = useState("");
   const [alertasDoServidor, setAlertasDoServidor] = useState<AlertaDeDuplicidade[]>([]);
+  const { aviso: avisoDaCarga, falhou: cargaFalhou, ler } = useAvisoDeCarga();
 
-  useEffect(() => {
-    void api<Servico[]>("/institutional/services?unidade=todas").then(setServicos).catch(() => setServicos([]));
-    void carregarUltimosAtendimentos();
-    void carregarPainel();
-    void carregarFila();
-  }, []);
-
-  async function carregarUltimosAtendimentos() {
-    const data = await api<AtendimentoRecepcao[]>("/reception/atendimentos").catch(() => []);
+  const carregarUltimosAtendimentos = useCallback(async () => {
+    const data = await ler<AtendimentoRecepcao[]>("os atendimentos recentes", "/reception/atendimentos", []);
     setUltimosAtendimentos(data);
-  }
+  }, [ler]);
 
-  async function carregarPainel() {
-    const data = await api<PainelRecepcao>("/reception/painel").catch(() => null);
+  const carregarPainel = useCallback(async () => {
+    const data = await ler<PainelRecepcao | null>("o resumo da recepção", "/reception/painel", null);
     setPainel(data);
     if (data?.ultimos_atendimentos) {
       setUltimosAtendimentos(data.ultimos_atendimentos);
     }
-  }
+  }, [ler]);
 
-  async function carregarFila() {
-    const data = await api<Senha[]>("/queues/").catch(() => []);
+  const carregarFila = useCallback(async () => {
+    const data = await ler<Senha[]>("a fila", "/queues/", []);
     setFila(data);
-  }
+  }, [ler]);
+
+  useEffect(() => {
+    // Fora do corpo do efeito, como nas outras telas: a primeira carga não encadeia renderizações.
+    const timer = window.setTimeout(() => {
+      void ler<Servico[]>("os serviços", "/institutional/services?unidade=todas", []).then(setServicos);
+      void carregarUltimosAtendimentos();
+      void carregarPainel();
+      void carregarFila();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [carregarFila, carregarPainel, carregarUltimosAtendimentos, ler]);
 
   useEffect(() => {
     const termo = busca.trim();
@@ -116,13 +126,12 @@ export default function RecepcaoPage() {
     }
 
     const timer = window.setTimeout(() => {
-      void api<CidadaoLista[]>(`/citizens/?busca=${encodeURIComponent(termo)}`)
-        .then(setCidadaos)
-        .catch(() => setCidadaos([]));
+      void ler<CidadaoLista[]>("a busca de cidadãos", `/citizens/?busca=${encodeURIComponent(termo)}`, [])
+        .then(setCidadaos);
     }, 300);
 
     return () => window.clearTimeout(timer);
-  }, [busca]);
+  }, [busca, ler]);
 
   async function selecionarCidadao(selecionado: CidadaoLista) {
     setCidadao(selecionado);
@@ -143,9 +152,9 @@ export default function RecepcaoPage() {
 
   async function carregarDadosDoCidadao(selecionado: CidadaoLista) {
     const [historicoData, casosData, recebidos] = await Promise.all([
-      api<HistoricoResponse>(`/citizens/${selecionado.id}/historico`).catch(() => ({ cidadao: selecionado, entradas: [] })),
-      api<Caso[]>(`/cases/?cidadao=${selecionado.id}`).catch(() => []),
-      api<EncaminhamentoResumo[]>(`/referrals/recebidos?cidadao=${selecionado.id}`).catch(() => []),
+      ler<HistoricoResponse>(HISTORICO_DA_PESSOA, `/citizens/${selecionado.id}/historico`, { cidadao: selecionado, entradas: [] }),
+      ler<Caso[]>(CASOS_DA_PESSOA, `/cases/?cidadao=${selecionado.id}`, []),
+      ler<EncaminhamentoResumo[]>("os encaminhamentos da pessoa", `/referrals/recebidos?cidadao=${selecionado.id}`, []),
     ]);
 
     setHistorico(historicoData.entradas);
@@ -263,6 +272,8 @@ export default function RecepcaoPage() {
           </Link>
         }
       />
+
+      {avisoDaCarga && <div className="notice mb-4" role="alert">{avisoDaCarga}</div>}
 
       <PainelResumoRecepcao painel={painel} />
 
@@ -408,7 +419,12 @@ export default function RecepcaoPage() {
                 <div className="grid min-w-0 gap-4 xl:col-start-1 xl:row-start-1">
                   {pendentes.length > 0 && <EncaminhamentosAguardando encaminhamentos={pendentes} nome={cidadao.nome} />}
                   <Card className="min-w-0">
-                    <PainelDoCidadao casos={casos} historico={historico} />
+                    <PainelDoCidadao
+                      casos={casos}
+                      historico={historico}
+                      casosIndisponiveis={cargaFalhou(CASOS_DA_PESSOA)}
+                      historicoIndisponivel={cargaFalhou(HISTORICO_DA_PESSOA)}
+                    />
                   </Card>
                 </div>
               </div>
@@ -615,7 +631,12 @@ function EncaminhamentosAguardando({ encaminhamentos, nome }: { encaminhamentos:
   );
 }
 
-function PainelDoCidadao({ casos, historico }: { casos: Caso[]; historico: EntradaHistorico[] }) {
+function PainelDoCidadao({ casos, historico, casosIndisponiveis, historicoIndisponivel }: {
+  casos: Caso[];
+  historico: EntradaHistorico[];
+  casosIndisponiveis: boolean;
+  historicoIndisponivel: boolean;
+}) {
   const casosAbertos = casos.filter((caso) => !["CONCLUIDO", "CANCELADO"].includes(caso.situacao));
   const ultimoContato = historico[0]?.quando;
 
@@ -629,29 +650,39 @@ function PainelDoCidadao({ casos, historico }: { casos: Caso[]; historico: Entra
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge tone={casosAbertos.length ? "warn" : "good"}>
-            {casosAbertos.length ? `${casosAbertos.length} caso(s) aberto(s)` : "Sem caso aberto"}
-          </Badge>
-          <Badge tone="neutral">
-            {ultimoContato ? `Último contato ${formatarDataCurta(ultimoContato)}` : "Sem histórico recente"}
-          </Badge>
+          {casosIndisponiveis ? (
+            <Badge tone="warn">Casos não conferidos</Badge>
+          ) : (
+            <Badge tone={casosAbertos.length ? "warn" : "good"}>
+              {casosAbertos.length ? `${casosAbertos.length} caso(s) aberto(s)` : "Sem caso aberto"}
+            </Badge>
+          )}
+          {historicoIndisponivel ? (
+            <Badge tone="warn">Histórico não conferido</Badge>
+          ) : (
+            <Badge tone="neutral">
+              {ultimoContato ? `Último contato ${formatarDataCurta(ultimoContato)}` : "Sem histórico recente"}
+            </Badge>
+          )}
         </div>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2 xl:gap-8">
-        <CasosRecentes casos={casos} />
-        <HistoricoAtendimentos historico={historico} />
+        <CasosRecentes casos={casos} indisponiveis={casosIndisponiveis} />
+        <HistoricoAtendimentos historico={historico} indisponivel={historicoIndisponivel} />
       </div>
     </div>
   );
 }
 
-function CasosRecentes({ casos }: { casos: Caso[] }) {
+function CasosRecentes({ casos, indisponiveis }: { casos: Caso[]; indisponiveis: boolean }) {
   return (
     <div className="min-w-0">
       <SectionHeading icon={ClipboardList} title="Casos recentes" count={casos.length} />
 
-      {casos.length === 0 ? (
+      {indisponiveis ? (
+        <EmptyState title="Casos indisponíveis" text="Não foi possível conferir os casos desta pessoa. Atualize a página antes de decidir." />
+      ) : casos.length === 0 ? (
         <EmptyState title="Nenhum caso recente" text="Se a demanda for nova, inicie o atendimento e gere a senha." />
       ) : (
         <ul>
@@ -694,12 +725,14 @@ function CasosRecentes({ casos }: { casos: Caso[] }) {
   );
 }
 
-function HistoricoAtendimentos({ historico }: { historico: EntradaHistorico[] }) {
+function HistoricoAtendimentos({ historico, indisponivel }: { historico: EntradaHistorico[]; indisponivel: boolean }) {
   return (
     <div className="min-w-0">
       <SectionHeading icon={Clock3} title="Histórico de atendimentos" count={historico.length} />
 
-      {historico.length === 0 ? (
+      {indisponivel ? (
+        <EmptyState title="Histórico indisponível" text="Não foi possível conferir o histórico desta pessoa. Atualize a página antes de conceder um benefício." />
+      ) : historico.length === 0 ? (
         <EmptyState title="Sem atendimentos recentes" text="Nada nos últimos meses que indique duplicidade." />
       ) : (
         <ul>

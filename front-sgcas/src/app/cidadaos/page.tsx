@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button, Card, EmptyState, Input, PageHeader, SectionHeading } from "@/components/ui";
 import { FormularioDeCadastro } from "@/components/cidadaos/formulario-de-cadastro";
-import { api } from "@/lib/api";
+import { avisoDeCarga, lerOuPadrao } from "@/lib/api";
 import { formatCPF } from "@/lib/utils";
 import type { CidadaoLista } from "@/types/sgcas";
 
@@ -24,12 +24,15 @@ export default function CidadaosPage() {
   const [resultados, setResultados] = useState<CidadaoLista[]>([]);
   const [buscou, setBuscou] = useState(false);
   const [carregando, setCarregando] = useState(true);
+  const [erroCarga, setErroCarga] = useState("");
   const [modalAberto, setModalAberto] = useState(false);
   const carregarCidadaos = useCallback(async (termo = "") => {
     setCarregando(true);
     const query = termo.trim() ? `?busca=${encodeURIComponent(termo.trim())}` : "";
-    const data = await api<CidadaoLista[]>(`/citizens/${query}`).catch(() => []);
+    const falhas: string[] = [];
+    const data = await lerOuPadrao<CidadaoLista[]>(`/citizens/${query}`, [], () => falhas.push("os cidadãos"));
     setResultados(data);
+    setErroCarga(avisoDeCarga(falhas));
     setBuscou(true);
     setCarregando(false);
   }, []);
@@ -114,7 +117,10 @@ export default function CidadaosPage() {
           </div>
         )}
 
-        {!carregando && buscou && resultados.length === 0 && (
+        {erroCarga && <div className="notice" role="alert">{erroCarga}</div>}
+
+        {/* Com a busca falhando, "Nada encontrado" levaria a cadastrar a pessoa de novo. */}
+        {!carregando && buscou && resultados.length === 0 && !erroCarga && (
           <EmptyState
             title={busca.trim() ? "Nada encontrado" : "Nenhum cidadão cadastrado"}
             text={busca.trim() ? "Confira o dado informado ou crie um novo cadastro." : "Quando houver cadastros, eles aparecem aqui automaticamente."}
