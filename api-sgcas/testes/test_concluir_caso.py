@@ -3,7 +3,6 @@ O relato do caso é um histórico: a observação da recepção, a evolução an
 durante o atendimento e, por fim, a conclusão. Concluir acrescenta; não pode
 apagar o que veio antes — é o registro que o próximo atendimento vai ler.
 """
-import re
 
 from apps.atendimentos.models import Caso, SenhaDaFila
 from testes.base import CenarioBase

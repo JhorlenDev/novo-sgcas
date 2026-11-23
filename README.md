@@ -422,9 +422,14 @@ Backend, com o ambiente virtual ativo e PostgreSQL configurado:
 ```bash
 cd api-sgcas
 source .venv/bin/activate
+pip install -r requirements-dev.txt   # ruff, uma vez
+ruff check .
 python manage.py check
+python manage.py makemigrations --check --dry-run
 python manage.py test testes --noinput
 ```
+
+O GitHub roda tudo isso sozinho em todo envio e pull request ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)); veja [Verificação automática](CONTRIBUTING.md#verificação-automática-ci).
 
 O usuário PostgreSQL dos testes precisa poder criar o banco de testes. Use ambiente de desenvolvimento separado da produção. A suíte cobre permissões, escopo por unidade, recepção, histórico, anexos, auditoria e cifragem, entre outros cenários.
 

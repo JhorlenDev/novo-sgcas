@@ -1,0 +1,5 @@
+# Ferramentas de desenvolvimento e do CI. Não vão para a imagem de produção.
+#
+#   ./.venv/bin/pip install -r requirements.txt -r requirements-dev.txt
+
+ruff==0.17.6
