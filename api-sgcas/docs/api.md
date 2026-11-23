@@ -144,10 +144,13 @@ POST /api/reception/atendimento
 unidade lê quando a pessoa aparecer lá. Sem ele, o mesmo pedido volta na semana
 seguinte sem rastro.
 
-**A prioridade não é aceita da recepção.** Mandar `"prioridade": "URGENTE"` não
-dá erro — o campo é ignorado e tudo entra como `NORMAL`. Dizer que um caso é
-urgente é avaliação técnica; quem atende reprioriza ao ver a situação.
-**Não coloque esse seletor na tela da recepção.**
+**A recepção dá prioridade até `ALTA`, nunca `URGENTE`.** `BAIXA`, `NORMAL` e
+`ALTA` valem como enviadas; `ALTA` é a senha preferencial (prefixo PR), que o
+balcão dá a quem tem direito por lei (idoso, pessoa com deficiência, gestante).
+Mandar `"prioridade": "URGENTE"` não dá erro: o pedido entra como `NORMAL`,
+porque dizer que um caso é urgente é avaliação técnica, e quem atende
+reprioriza ao ver a situação. **Não ofereça "Urgente" na tela da recepção**:
+quem escolhesse acharia que a pessoa entrou como urgente.
 
 **O serviço tem de pertencer à unidade de destino.** A recepção *vê* os
 serviços de outras unidades — é assim que descobre para onde encaminhar — mas

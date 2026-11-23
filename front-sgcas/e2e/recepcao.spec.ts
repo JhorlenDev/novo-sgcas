@@ -50,6 +50,26 @@ test("inicia o atendimento: cria o caso e mostra a senha", async ({ page, api })
   });
 });
 
+test("a recepção dá senha preferencial, mas não oferece urgência", async ({ page, api }) => {
+  simularRecepcao(api);
+  api.em("POST /api/reception/atendimento", {
+    json: { desfecho: "ENCAMINHADO", caso: caso({ prioridade: "ALTA" }), senha: { senha: "PR001" }, encaminhamento: null },
+  });
+
+  await selecionarMaria(page);
+  await page.getByRole("button", { name: /^Iniciar atendimento/ }).click();
+  const prioridade = page.getByLabel("Prioridade na fila");
+  // A API rebaixa a urgência vinda da recepção para Normal: oferecê-la enganaria quem escolhe.
+  await expect(prioridade.locator("option")).toHaveText(["Baixa", "Normal", "Alta (preferencial)"]);
+  await page.getByLabel("Serviço solicitado").selectOption(CESTA.id);
+  await prioridade.selectOption("ALTA");
+  await page.getByRole("button", { name: "Criar caso e gerar senha" }).click();
+
+  await expect(page.getByText("Senha gerada: PR001.", { exact: false })).toBeVisible();
+  const [registro] = api.chamadasA("POST /api/reception/atendimento");
+  expect(registro.corpo).toMatchObject({ prioridade: "ALTA" });
+});
+
 test("finaliza no balcão: registra o motivo e não gera senha", async ({ page, api }) => {
   simularRecepcao(api);
   api.em("POST /api/reception/atendimento", { json: { desfecho: "FINALIZADO", caso: null, senha: null, encaminhamento: null } });

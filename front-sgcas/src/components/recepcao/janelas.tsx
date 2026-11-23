@@ -93,12 +93,17 @@ export function JanelaDeRegistro({
           </Field>
 
           {acao === "ENCAMINHADO" && (
-            <Field label="Prioridade na fila">
+            // Sem "Urgente": urgência é avaliação técnica, e a API rebaixa a da recepção para
+            // Normal em silêncio. Oferecê-la faria a recepcionista achar que a pessoa entrou
+            // como urgente quando entrou na fila comum.
+            <Field
+              label="Prioridade na fila"
+              hint="Alta é a senha preferencial (idoso, pessoa com deficiência, gestante). A urgência é avaliada por quem atende."
+            >
               <Select value={prioridade} onChange={(event) => onPrioridade(event.target.value)} required>
                 <option value="BAIXA">Baixa</option>
                 <option value="NORMAL">Normal</option>
-                <option value="ALTA">Alta</option>
-                <option value="URGENTE">Urgente</option>
+                <option value="ALTA">Alta (preferencial)</option>
               </Select>
             </Field>
           )}
