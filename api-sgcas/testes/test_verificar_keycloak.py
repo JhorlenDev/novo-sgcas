@@ -238,6 +238,30 @@ class VerificarKeycloak(SimpleTestCase):
         self.assertIsNone(erro, saida)
         self.assertTrue(any('Só 1 pessoa tem o papel ADMIN' in a for a in self.avisos(saida)), saida)
 
+    def equipe(self):
+        self.admins(
+            {'id': '1', 'username': 'jhorlen', 'firstName': 'Jhorlen', 'email': 'jhorlen@exemplo.gov.br', 'enabled': True},
+            {'id': '2', 'username': 'thiago', 'firstName': 'Thiago', 'email': 'thiago@exemplo.gov.br', 'enabled': False},
+            grupos=[('gestao', [{'id': '3', 'username': 'vini', 'firstName': 'Vini', 'enabled': True}])],
+        )
+
+    def test_sem_a_opcao_nao_mostra_quem_sao(self):
+        self.equipe()
+        saida, _ = self.rodar()
+        for usuario in ('jhorlen', 'thiago', 'vini'):
+            self.assertNotIn(usuario, saida)
+
+    def test_com_a_opcao_mostra_usuario_nome_e_origem_mas_nao_o_email(self):
+        self.equipe()
+        saida = StringIO()
+        call_command('verificar_keycloak', mostrar_admins=True, stdout=saida)
+        saida = saida.getvalue()
+        self.assertIn('· jhorlen (Jhorlen) — papel direto', saida)
+        self.assertIn('· thiago (Thiago) — papel direto, CONTA DESATIVADA', saida)
+        self.assertIn('· vini (Vini) — grupo "gestao"', saida)
+        self.assertNotIn('@exemplo.gov.br', saida)
+        self.assertIn('Há 2 pessoas com o papel ADMIN e a conta ativa (1 com a conta desativada', saida)
+
     def test_grupos_inacessiveis_viram_aviso_e_os_diretos_ainda_contam(self):
         self.keycloak.trocar(f'{ADMIN}/clients/uuid-do-client/roles/ADMIN/groups', Resposta(403, None))
         saida, erro = self.rodar()
