@@ -2,8 +2,9 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import { BrandLogo } from "@/components/shared/brand-logo";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, CheckCircle2, Clock3, Loader2, LockKeyhole, ShieldCheck } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock3, Loader2, LockKeyhole } from "lucide-react";
 import { loginWithTefeCidadao } from "@/lib/api";
 import { defaultRouteForRole, useAuth } from "@/lib/auth";
 
@@ -133,9 +134,7 @@ function LoginContent() {
           <div className="absolute inset-x-12 bottom-24 h-px bg-white/10" />
 
           <div className="relative flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15">
-              <ShieldCheck className="h-5 w-5" aria-hidden="true" />
-            </div>
+            <BrandLogo />
             <div>
               <p className="text-lg font-semibold leading-tight">SGCAS</p>
               <p className="text-xs text-white/65">Sistema de Gestão de Casos</p>
@@ -173,9 +172,7 @@ function LoginContent() {
         <section className="flex items-center justify-center px-5 py-8 sm:px-8">
           <div className="w-full max-w-[430px]">
             <div className="mb-10 flex items-center gap-3 lg:hidden">
-              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary text-white">
-                <ShieldCheck className="h-5 w-5" aria-hidden="true" />
-              </div>
+              <BrandLogo />
               <div>
                 <p className="text-lg font-semibold leading-tight">SGCAS</p>
                 <p className="text-xs text-[#5D6C7B]">Sistema de Gestão de Casos</p>
@@ -184,9 +181,7 @@ function LoginContent() {
 
             <div className="rounded-lg border border-[#DEE3E9] bg-white p-6 shadow-[0_24px_60px_-38px_rgba(14,77,157,0.34)] sm:p-8">
               <div className="mb-8 space-y-3">
-                <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <ShieldCheck className="h-7 w-7" aria-hidden="true" />
-                </div>
+                <BrandLogo className="h-14 w-[84px]" />
                 <div>
                   <h2 className="text-3xl font-medium leading-tight tracking-[-0.01em] text-[#1C2B33]">Entrar no SGCAS</h2>
                   <p className="mt-2 text-sm leading-6 text-[#5D6C7B] [text-wrap:wrap]">

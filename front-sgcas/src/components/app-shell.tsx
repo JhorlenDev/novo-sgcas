@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { BrandLogo } from "@/components/shared/brand-logo";
 import { usePathname, useRouter } from "next/navigation";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
@@ -11,7 +12,6 @@ import {
   ConciergeBell,
   FolderOpen,
   HeartHandshake,
-  Shield,
   LayoutDashboard,
   LogOut,
   MapPinned,
@@ -336,9 +336,7 @@ function BotaoDoMenu({ rotulo, onClick, className }: { rotulo: string; onClick: 
 function Marca({ href, compacta = false, onNavegar }: { href: string; compacta?: boolean; onNavegar?: () => void }) {
   return (
     <Link href={href} onClick={onNavegar} className="flex min-w-0 items-center gap-3 rounded-lg" title="SGCAS — início">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-primary text-primary-foreground">
-        <Shield className="h-[18px] w-[18px]" aria-hidden="true" />
-      </span>
+      <BrandLogo className={compacta ? "h-8 w-12" : undefined} />
       <span className={cn("min-w-0", compacta && "sr-only")}>
         <span className="block text-[15px] font-bold leading-tight tracking-tight text-meta-charcoal">SGCAS</span>
         <span className="block truncate text-xs leading-tight text-meta-slate">Assistência Social</span>

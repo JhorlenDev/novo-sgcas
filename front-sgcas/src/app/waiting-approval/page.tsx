@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { BrandLogo } from "@/components/shared/brand-logo";
 import { useEffect, useState } from "react";
-import { Clock3, Landmark, Loader2, Send, UserRoundCheck } from "lucide-react";
+import { Clock3, Loader2, Send, UserRoundCheck } from "lucide-react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui";
 
@@ -54,9 +55,7 @@ export default function WaitingApprovalPage() {
     <main className="center-screen">
       <div className="w-full max-w-xl">
         <div className="mb-6 flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Landmark className="h-5 w-5" aria-hidden="true" />
-          </span>
+          <BrandLogo />
           <div>
             <p className="text-lg font-bold leading-tight">SGCAS</p>
             <p className="text-xs text-meta-slate">Gestão de Casos da Assistência Social</p>
