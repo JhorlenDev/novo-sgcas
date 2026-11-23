@@ -339,7 +339,13 @@ class ChaveSecretaDeProducao(CenarioBase):
         self.assertNotEqual(resultado.returncode, 0)
 
     def test_chave_forte_sobe_em_producao(self):
-        resultado = _importar_settings(DEBUG='False', DJANGO_SECRET_KEY='x' * 10 + uuid.uuid4().hex + uuid.uuid4().hex)
+        # Em produção a cifragem também é exigida. As chaves vão explícitas: sem elas o teste só
+        # passava onde houvesse um .env com chaves (as configurações o leem), e falhava no CI.
+        resultado = _importar_settings(
+            DEBUG='False', DJANGO_SECRET_KEY='x' * 10 + uuid.uuid4().hex + uuid.uuid4().hex,
+            PII_ENCRYPTION_ENABLED='true', PII_ENCRYPTION_KEY=base64.b64encode(os.urandom(32)).decode(),
+            PII_HMAC_KEY=base64.b64encode(os.urandom(32)).decode(),
+        )
         self.assertEqual(resultado.returncode, 0, resultado.stderr)
 
     def test_em_desenvolvimento_a_chave_de_exemplo_vale(self):
