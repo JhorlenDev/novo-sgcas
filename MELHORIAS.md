@@ -6,6 +6,7 @@ Levantamento de 23/11/2026, sobre o ramo `producao`, e o que foi feito no ramo
 ## Pendências que dependem de outras pessoas
 
 - [ ] **Encarregado de dados (DPO).** Quem o designa é a Prefeitura Municipal de Tefé, a controladora dos dados (LGPD, art. 5º, VI e VIII, e art. 41), por ato formal. Pode ser o mesmo encarregado que a Prefeitura já tenha para os outros sistemas. Ao ser designado, preencha `ENCARREGADO` em `front-sgcas/src/lib/controlador.ts` e a seção do encarregado em `api-sgcas/docs/aviso-de-privacidade.md` e `api-sgcas/docs/termo-consentimento.md`. Até lá, o termo diz que ele será designado e indica a sede da Prefeitura.
+- [ ] **Conferir os administradores no Tefé Cidadão.** Rodar `python manage.py verificar_keycloak` com o segredo real do client (no servidor ou no `.env` local): ele diz quantas pessoas ativas têm ADMIN. Devem ser pelo menos duas.
 - [ ] **Exigir o CI verde para juntar mudanças.** Quem administra o repositório no GitHub ativa em *Settings → Branches → Branch protection rules*, marcando as tarefas "API (Django)" e "Frontend (Next.js)".
 
 ## Resolvido
@@ -26,6 +27,7 @@ Achados durante o trabalho, também corrigidos:
 - [x] A Recepção oferecia prioridade "Urgente", que a API transforma em Normal em silêncio: a pessoa ia para a fila comum com a recepcionista achando que era urgente (`cbb4fc8`).
 - [x] Na Institucional, a unidade era cadastrada, mas a tela dizia "Não foi possível cadastrar" e não atualizava a lista; e os erros de cadastro apareciam atrás da janela (`e760529`).
 - [x] Um teste de segurança da API só passava onde houvesse um `.env` com chaves, e falhava no CI (`29acf67`).
+- [x] O `verificar_keycloak` dizia "Tudo certo" mesmo com **nenhum administrador**, o cenário em que o sistema já ficou trancado. Agora falha sem admin ativo, avisa com um só, desconta contas desativadas e conta quem tem ADMIN por grupo (`0bad952`).
 
 ### 4. Textos legais
 - [x] O termo exibido ao cidadão e os textos de `docs/` têm o CNPJ (04.426.383/0001-15, dígitos verificadores conferidos) e o endereço da Prefeitura, sem nenhum campo entre colchetes (`b1e7c6f`). Falta só o encarregado, acima.
