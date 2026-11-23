@@ -181,13 +181,13 @@ function LoginContent() {
 
             <div className="rounded-lg border border-[#DEE3E9] bg-white p-6 shadow-[0_24px_60px_-38px_rgba(14,77,157,0.34)] sm:p-8">
               <div className="mb-8 space-y-3">
-                <BrandLogo className="h-14 w-[84px]" />
-                <div>
-                  <h2 className="text-3xl font-medium leading-tight tracking-[-0.01em] text-[#1C2B33]">Entrar no SGCAS</h2>
-                  <p className="mt-2 text-sm leading-6 text-[#5D6C7B] [text-wrap:wrap]">
-                    Use sua conta institucional do Tefé Cidadão para acessar o sistema.
-                  </p>
+                <div className="flex items-center gap-3">
+                  <BrandLogo className="h-10 w-[60px] sm:h-12 sm:w-[72px]" />
+                  <h2 className="min-w-0 text-2xl font-medium leading-tight tracking-[-0.01em] text-[#1C2B33] sm:text-3xl">Entrar no SGCAS</h2>
                 </div>
+                <p className="text-sm leading-6 text-[#5D6C7B] [text-wrap:wrap]">
+                  Use sua conta institucional do Tefé Cidadão para acessar o sistema.
+                </p>
               </div>
 
               {loginError && (
