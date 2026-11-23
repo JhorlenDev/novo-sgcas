@@ -156,7 +156,7 @@ novo-sgcas/
     ├── src/lib/              # Cliente HTTP, sessão e utilitários
     ├── src/types/            # Contratos TypeScript
     ├── public/               # Imagens e identidade visual
-    └── scripts/              # Verificações de navegador
+    └── e2e/                  # Testes de navegador (Playwright), com a API simulada
 ```
 
 ## Pré-requisitos
@@ -398,8 +398,13 @@ Frontend:
 cd front-sgcas
 npm ci
 npm run lint
+npm run typecheck
 npm run build
+npx playwright install chromium   # só na primeira vez
+npm run test:e2e
 ```
+
+`npm run test:e2e` faz o build, sobe o frontend na porta 3100 e abre as telas num navegador, com a API **simulada** em `e2e/apoio.ts`: não precisa de banco, API nem Tefé Cidadão. Cada teste diz o que cada rota responde; a tela que chama uma rota que o teste não simula (uma rota errada, por exemplo) faz o teste falhar. Para usar o Edge já instalado em vez de baixar o Chromium, rode com `PLAYWRIGHT_CHANNEL=msedge`; para testar um servidor que já está no ar, `E2E_URL=http://localhost:3000`.
 
 Backend, com o ambiente virtual ativo e PostgreSQL configurado:
 
@@ -412,7 +417,7 @@ python manage.py test testes --noinput
 
 O usuário PostgreSQL dos testes precisa poder criar o banco de testes. Use ambiente de desenvolvimento separado da produção. A suíte cobre permissões, escopo por unidade, recepção, histórico, anexos, auditoria e cifragem, entre outros cenários.
 
-Há também scripts de navegador em `front-sgcas/scripts/`. Eles têm requisitos próprios de navegador e servidor; o teste de login depende de credenciais reais e não integra `npm run lint` ou `npm run build`.
+O teste de entrada real pelo Tefé Cidadão (`e2e/login-real.spec.ts`) precisa de um SGCAS no ar e de uma conta de verdade, então fica pulado, a menos que se informe `E2E_URL`, `SGCAS_E2E_EMAIL` e `SGCAS_E2E_SENHA`.
 
 ## Produção
 
