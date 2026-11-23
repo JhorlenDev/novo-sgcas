@@ -107,6 +107,9 @@ export default function InstitucionalPage() {
   const [erroCarga, setErroCarga] = useState("");
   const [modalUnidade, setModalUnidade] = useState(false);
   const [modalServico, setModalServico] = useState(false);
+  // O erro de cada cadastro aparece na janela dele, que continua aberta: atrás dela ninguém o veria.
+  const [erroDaUnidade, setErroDaUnidade] = useState("");
+  const [erroDoServico, setErroDoServico] = useState("");
   const [salvando, setSalvando] = useState(false);
   // A rede tem dezenas de serviços: filtrar por unidade e por nome evita rolar a lista inteira.
   const [filtroDeUnidade, setFiltroDeUnidade] = useState("");
@@ -144,9 +147,13 @@ export default function InstitucionalPage() {
   async function criarUnidade(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMensagem("");
+    setErroDaUnidade("");
     setSalvando(true);
 
-    const form = new FormData(event.currentTarget);
+    // Depois do `await` o React já anulou `event.currentTarget`: o formulário é guardado antes.
+    // Sem isso, `reset()` lançava erro, e a unidade criada aparecia como "não foi possível".
+    const formulario = event.currentTarget;
+    const form = new FormData(formulario);
     try {
       await api("/institutional/units", {
         method: "POST",
@@ -161,10 +168,10 @@ export default function InstitucionalPage() {
       });
       setMensagem("Unidade cadastrada.");
       setModalUnidade(false);
-      event.currentTarget.reset();
+      formulario.reset();
       await carregar();
-    } catch {
-      setMensagem("Não foi possível cadastrar a unidade. Confira sigla e campos obrigatórios.");
+    } catch (error) {
+      setErroDaUnidade(mensagemDaApi(error, "Não foi possível cadastrar a unidade. Confira sigla e campos obrigatórios."));
     } finally {
       setSalvando(false);
     }
@@ -204,6 +211,7 @@ export default function InstitucionalPage() {
   async function criarServico(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMensagem("");
+    setErroDoServico("");
     setSalvando(true);
 
     const formulario = event.currentTarget;
@@ -224,7 +232,7 @@ export default function InstitucionalPage() {
       setClassificacao(SEM_CLASSIFICACAO);
       await carregar();
     } catch (error) {
-      setMensagem(mensagemDaApi(error, "Não foi possível cadastrar o serviço. Confira unidade e nome."));
+      setErroDoServico(mensagemDaApi(error, "Não foi possível cadastrar o serviço. Confira unidade e nome."));
     } finally {
       setSalvando(false);
     }
@@ -237,11 +245,11 @@ export default function InstitucionalPage() {
         description="Gerencie as unidades da rede e os serviços disponíveis para atendimento."
         action={
           <>
-            <SecondaryButton type="button" onClick={() => setModalUnidade(true)}>
+            <SecondaryButton type="button" onClick={() => { setErroDaUnidade(""); setModalUnidade(true); }}>
               <Building2 size={16} aria-hidden="true" />
               Nova unidade
             </SecondaryButton>
-            <Button type="button" onClick={() => setModalServico(true)} disabled={unidades.length === 0}>
+            <Button type="button" onClick={() => { setErroDoServico(""); setModalServico(true); }} disabled={unidades.length === 0}>
               <Plus size={16} aria-hidden="true" />
               Novo serviço
             </Button>
@@ -411,6 +419,8 @@ export default function InstitucionalPage() {
               </div>
             )}
 
+            {erroDaUnidade && <div className="notice" role="alert">{erroDaUnidade}</div>}
+
             <DialogFooter>
               <SecondaryButton type="button" onClick={() => setModalUnidade(false)} disabled={salvando}>
                 Cancelar
@@ -444,6 +454,8 @@ export default function InstitucionalPage() {
             <Field label="Descrição">
               <textarea className="input" name="descricao" placeholder="Descrição curta do serviço" />
             </Field>
+
+            {erroDoServico && <div className="notice" role="alert">{erroDoServico}</div>}
 
             <DialogFooter>
               <SecondaryButton type="button" onClick={() => setModalServico(false)} disabled={salvando}>
