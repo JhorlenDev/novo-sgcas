@@ -42,66 +42,34 @@ AUXILIOS = [
      'Benefício Eventual', 'SITUACAO_CALAMIDADE'),
 ]
 
+# Todos os CRAS ofertam os mesmos serviços. Um CRAS novo entra no CATALOGO com esta lista.
+SERVICOS_DOS_CRAS = [
+    ('PAEFI — Proteção e Atendimento Especializado a Famílias e Indivíduos',
+     'Serviço tipificado da proteção social especial de média complexidade.',
+     'Violação de Direitos'),
+    ('Serviço Especializado em Abordagem Social',
+     'Busca ativa em espaços públicos e acolhimento.', 'Situação de Rua'),
+    ('Serviço de Proteção Social a Adolescentes em Medida Socioeducativa',
+     'Liberdade assistida (LA) e prestação de serviço à comunidade (PSC).',
+     'Violação de Direitos'),
+    ('Serviço Especializado para Pessoas em Situação de Rua',
+     'Atendimento à população em situação de rua.', 'Situação de Rua'),
+    ('Visita domiciliar', 'Visita técnica ao domicílio.', 'Acompanhamento Familiar'),
+    ('Estudo psicossocial e laudos técnicos',
+     'Elaboração de estudo psicossocial e documentos técnicos.', 'Violação de Direitos'),
+    *AUXILIOS,
+]
+
 # (sigla da unidade, nome, tipo, [(serviço, descrição, categoria municipal[, tipo de auxílio])])
+#
+# A sigla é a chave: o comando acha a unidade por ela a cada implantação. Não a troque depois
+# de implantada, ou a unidade é criada de novo, em duplicata.
 CATALOGO = [
     # ── CRAS ──────────────────────────────────────────────────────────
-    (
-        'CRAS-C', 'CRAS Centro', 'CRAS',
-        [
-            ('PAEFI — Proteção e Atendimento Especializado a Famílias e Indivíduos',
-             'Serviço tipificado da proteção social especial de média complexidade.',
-             'Violação de Direitos'),
-            ('Serviço Especializado em Abordagem Social',
-             'Busca ativa em espaços públicos e acolhimento.', 'Situação de Rua'),
-            ('Serviço de Proteção Social a Adolescentes em Medida Socioeducativa',
-             'Liberdade assistida (LA) e prestação de serviço à comunidade (PSC).',
-             'Violação de Direitos'),
-            ('Serviço Especializado para Pessoas em Situação de Rua',
-             'Atendimento à população em situação de rua.', 'Situação de Rua'),
-            ('Visita domiciliar', 'Visita técnica ao domicílio.', 'Acompanhamento Familiar'),
-            ('Estudo psicossocial e laudos técnicos',
-             'Elaboração de estudo psicossocial e documentos técnicos.', 'Violação de Direitos'),
-            *AUXILIOS,
-        ],
-    ),
-    (
-        'CRAS-N', 'CRAS Norte', 'CRAS',
-        [
-            ('PAEFI — Proteção e Atendimento Especializado a Famílias e Indivíduos',
-             'Serviço tipificado da proteção social especial de média complexidade.',
-             'Violação de Direitos'),
-            ('Serviço Especializado em Abordagem Social',
-             'Busca ativa em espaços públicos e acolhimento.', 'Situação de Rua'),
-            ('Serviço de Proteção Social a Adolescentes em Medida Socioeducativa',
-             'Liberdade assistida (LA) e prestação de serviço à comunidade (PSC).',
-             'Violação de Direitos'),
-            ('Serviço Especializado para Pessoas em Situação de Rua',
-             'Atendimento à população em situação de rua.', 'Situação de Rua'),
-            ('Visita domiciliar', 'Visita técnica ao domicílio.', 'Acompanhamento Familiar'),
-            ('Estudo psicossocial e laudos técnicos',
-             'Elaboração de estudo psicossocial e documentos técnicos.', 'Violação de Direitos'),
-            *AUXILIOS,
-        ],
-    ),
-    (
-        'CRAS-S', 'CRAS Sul', 'CRAS',
-        [
-            ('PAEFI — Proteção e Atendimento Especializado a Famílias e Indivíduos',
-             'Serviço tipificado da proteção social especial de média complexidade.',
-             'Violação de Direitos'),
-            ('Serviço Especializado em Abordagem Social',
-             'Busca ativa em espaços públicos e acolhimento.', 'Situação de Rua'),
-            ('Serviço de Proteção Social a Adolescentes em Medida Socioeducativa',
-             'Liberdade assistida (LA) e prestação de serviço à comunidade (PSC).',
-             'Violação de Direitos'),
-            ('Serviço Especializado para Pessoas em Situação de Rua',
-             'Atendimento à população em situação de rua.', 'Situação de Rua'),
-            ('Visita domiciliar', 'Visita técnica ao domicílio.', 'Acompanhamento Familiar'),
-            ('Estudo psicossocial e laudos técnicos',
-             'Elaboração de estudo psicossocial e documentos técnicos.', 'Violação de Direitos'),
-            *AUXILIOS,
-        ],
-    ),
+    ('CRAS-C', 'CRAS Centro', 'CRAS', SERVICOS_DOS_CRAS),
+    ('CRAS-N', 'CRAS Norte', 'CRAS', SERVICOS_DOS_CRAS),
+    ('CRAS-S', 'CRAS Sul', 'CRAS', SERVICOS_DOS_CRAS),
+    ('CRAS-A', 'CRAS II Abial', 'CRAS', SERVICOS_DOS_CRAS),
     # ── CREAS ─────────────────────────────────────────────────────────
     (
         'CREAS-001', 'CREAS', 'CREAS',
