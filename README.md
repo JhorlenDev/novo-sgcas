@@ -227,6 +227,8 @@ python manage.py runserver 0.0.0.0:8000
 
 O arquivo `compose.dev.yml` expõe o banco **somente em `127.0.0.1:5434`** por padrão. O Compose base mantém o PostgreSQL acessível apenas na rede Docker.
 
+**Sem Docker:** em computador com pouca memória ou disco, instale o PostgreSQL 16 direto na máquina, também na porta `5434`. Assim o `.env` fica igual, e basta trocar a primeira linha acima por ligar o banco local. O passo a passo, com o pacote zip para Windows que dispensa instalador, está em [api-sgcas/README.md](api-sgcas/README.md#sem-docker).
+
 O comando `cadastrar_servicos` cria/atualiza coordenações, unidades, demandas e serviços do catálogo institucional. Ele é idempotente e não cria contas de acesso nem cidadãos de demonstração.
 
 Nos quatro CRAS (Centro, Norte, Sul e II Abial), os benefícios eventuais (**Auxílio maternidade**, **Auxílio funeral**, **Cesta básica** e **Auxílio em calamidade pública**) já saem do catálogo com a categoria "Benefício Eventual" e o tipo de auxílio: é isso que liga cada serviço ao aviso de repetição no balcão (e a regra de um ano do auxílio maternidade). As unidades não precisam cadastrar nada para isso valer. Como o comando roda a cada implantação, num serviço que já existe ele só **preenche** a categoria e o tipo quando estão vazios: o que a coordenação decidiu na tela Institucional ("Classificar") não é desfeito. Para incluir outro auxílio em todas as implantações, acrescente-o à lista `AUXILIOS` em `api-sgcas/apps/institucional/management/commands/cadastrar_servicos.py`.
@@ -247,7 +249,7 @@ Abra **http://localhost:3000**.
 | --- | --- |
 | Aplicação | `http://localhost:3000` |
 | API | `http://localhost:8000/api/` |
-| PostgreSQL | `127.0.0.1:5434` com o override de desenvolvimento |
+| PostgreSQL | `127.0.0.1:5434` (override de desenvolvimento do Docker ou PostgreSQL instalado na máquina) |
 
 Se o Next.js escolher outra porta, ajuste o endereço do frontend e o callback no `.env` e no Keycloak. Prefira liberar a porta `3000` para manter os exemplos consistentes.
 
@@ -553,7 +555,7 @@ python manage.py completar_eliminacao_lgpd             # apaga, e não há volta
 
 | Sintoma | O que conferir |
 | --- | --- |
-| Conexão recusada em `5434` | Suba o banco com `compose.dev.yml` e confira `POSTGRES_PORT` |
+| Conexão recusada em `5434` | Suba o banco: com Docker, pelo `compose.dev.yml` (confira `POSTGRES_PORT`); sem Docker, com `pg_ctl start` (confira `port` no `postgresql.conf`) |
 | Cada tela ou comando leva uns 20 segundos (Windows) | Troque `localhost` por `127.0.0.1` em `DATABASE_URL` |
 | Autenticação do PostgreSQL falha | Senha de `DATABASE_URL` e `POSTGRES_PASSWORD`; mudar `.env` não altera a senha de um volume já inicializado |
 | Relação/coluna inexistente | Execute `python manage.py migrate` no banco correto |

@@ -44,7 +44,11 @@ KEYCLOAK_CLIENT_SECRET=troque-pelo-secret-real
 KEYCLOAK_REDIRECT_URI=http://localhost:3000/api/auth/keycloak/callback
 ```
 
-### 3. Subir banco com Docker
+### 3. Subir o banco
+
+Há duas formas. As duas deixam o banco em `127.0.0.1:5434`, com o mesmo usuário, senha e nome de banco, então o `.env` não muda de uma para a outra.
+
+#### Com Docker
 
 ```bash
 docker compose -f docker-compose.yml -f compose.dev.yml up -d --wait postgres
@@ -58,6 +62,38 @@ database: sgcas
 user: sgcas
 password: valor de POSTGRES_PASSWORD
 ```
+
+#### Sem Docker
+
+Para computador com pouca memória ou pouco disco. O Docker no Windows roda uma máquina virtual inteira só para o banco. Instalado direto na máquina, o PostgreSQL usa uns 20–30 MB de RAM e cerca de 200 MB de disco. Use a versão **16**, a mesma da produção. A produção continua com Docker: isto vale só para desenvolver.
+
+**Windows**, com o pacote zip (sem instalador e sem precisar de administrador):
+
+1. Baixe o *zip archive* do PostgreSQL 16 para Windows x64 em <https://www.enterprisedb.com/download-postgresql-binaries>.
+2. Extraia a pasta `pgsql` em `%USERPROFILE%\dev\pgsql` (ou outro lugar, ajustando os comandos). Só `bin`, `lib` e `share` são necessárias: pode apagar `pgAdmin 4`, `StackBuilder`, `doc`, `include` e `symbols`. Com só as três, o programa ocupa cerca de 125 MB.
+3. No PowerShell, crie o banco uma única vez. O `initdb` pede uma senha: use a de `DATABASE_URL`.
+
+   ```powershell
+   $PG = "$env:USERPROFILE\dev\pgsql\bin"; $DATA = "$env:USERPROFILE\dev\pgdata"
+
+   & "$PG\initdb.exe" -D $DATA -U sgcas -W -A scram-sha-256 -E UTF8 --locale=C
+   Add-Content "$DATA\postgresql.conf" "`nport = 5434`nlisten_addresses = 'localhost'"
+   & "$PG\pg_ctl.exe" start -D $DATA -l "$DATA\inicializacao.log" -w
+   & "$PG\createdb.exe" -h 127.0.0.1 -p 5434 -U sgcas sgcas
+   ```
+
+   Como no container, `sgcas` é o dono do servidor. Isso também deixa o `manage.py test` criar o banco de testes.
+
+O banco **não liga sozinho** com o Windows. Ligue antes de subir a API e desligue ao terminar, para devolver a memória:
+
+```powershell
+& "$env:USERPROFILE\dev\pgsql\bin\pg_ctl.exe" start -D "$env:USERPROFILE\dev\pgdata" -l "$env:USERPROFILE\dev\pgdata\inicializacao.log" -w
+& "$env:USERPROFILE\dev\pgsql\bin\pg_ctl.exe" stop -D "$env:USERPROFILE\dev\pgdata"
+```
+
+Se quiser, guarde essas duas linhas em `pg-ligar.cmd` e `pg-desligar.cmd` numa pasta do `PATH`.
+
+**Linux e macOS:** instale o PostgreSQL 16 pelo gerenciador de pacotes (`postgresql-16` no apt, `postgresql@16` no Homebrew), crie o usuário `sgcas` como superusuário, com a senha de `DATABASE_URL`, e o banco `sgcas`. Depois ponha a porta do pacote em `DATABASE_URL` ou mude `port` para `5434` no `postgresql.conf`.
 
 ### 4. Rodar migrations
 
